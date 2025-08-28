@@ -6,7 +6,6 @@ from dotenv import load_dotenv
 
 # .envファイルから環境変数を読み込む
 load_dotenv()
-
 # 環境変数からデータベース接続情報を取得
 DB_NAME = os.getenv('POSTGRES_DB')
 DB_USER = os.getenv('POSTGRES_USER')

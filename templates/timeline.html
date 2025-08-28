@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>タイムライン</title>
+     <style>
+        body { font-family: sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccc; padding-bottom: 10px; }
+        .header h1 { margin: 0; }
+        .header a { text-decoration: none; background-color: #dc3545; color: white; padding: 8px 15px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>ようこそ, {{ user.display_name }} さん</h1>
+            <a href="/logout">ログアウト</a>
+        </div>
+        
+        <h2>あなたのタイムライン</h2>
+        <p>（ここにフィルタリングされたタイムラインが表示されます）</p>
+
+    </div>
+</body>
+</html>

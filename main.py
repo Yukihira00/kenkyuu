@@ -1,88 +1,153 @@
+import secrets
 from fastapi import FastAPI, Request, Form
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from typing import List
+from starlette.middleware.sessions import SessionMiddleware
 
+# 自作モジュールのインポート
+import database
+import quiz_checker
+import timeline_checker
+
+# --- アプリケーションの初期設定 ---
 app = FastAPI()
+
+# セッション機能の追加 (ユーザーのログイン状態を記憶するため)
+# secret_keyはアプリを起動するたびに変わるランダムな文字列になります
+app.add_middleware(SessionMiddleware, secret_key=secrets.token_hex(32))
 
 # HTMLテンプレートを読み込む設定
 templates = Jinja2Templates(directory="templates")
 
-# ユーザーから提供された60個の質問リスト
-hexaco_questions = [
-    "芸術の重要性を信じている。",
-    "物事を整理整頓するのが好きだ。",
-    "怒るべき相手にも優しく接する。",
-    "普段あまり人と話さない。",
-    "自分は臆病者だと思う。",
-    "相手から何かを得たいときは、相手の冗談がつまらなくても笑って合わせてしまう。",
-    "歴史や科学を学ぶことに興味がある。",
-    "目標を達成するためには自分を追い込む。",
-    "毒舌になることがある。",
-    "即興で人前で話すのが得意だ。",
-    "普段いろいろなことを心配する。",
-    "絶対にバレないってわかってたら、 1 億円くらい盗んじゃうかも。",
-    "直感的なひらめきが急に訪れることはほとんどない。",
-    "すべてが完璧になるまでやり続ける。",
-    "自分の要求が多く、満足しにくい。",
-    "友達を作るのが得意だ。",
-    "他人に影響されやすい。",
-    "大金持ちになることは、私にとってそれほど重要ではない。",
-    "人から変わり者だと思われている。",
-    "よく考えずに決めてしまうことがある。",
-    "めったに他の人に対して怒りを感じない。",
-    "たいてい元気いっぱいで活発に動いている。", # 「いつばい」を修正
-    "悲しい出来事を聞くとすぐに悲しくなる。",
-    "自分は特別ではなくただの普通の人間だと思う。", # 「特別てはなく」を修正
-    "新しいアイデアを考えるのが大好きだ。",
-    "仕事で最高の品質を追求したい。",
-    "他人を許すのが難しい。",
-    "飲み会では盛り上げ役になる。",
-    "危険が迫るとパニックになるだろう。", # 「バニック」を修正
-    "出世のために上司にゴマすりするのは、うまくいきそうでも避けている。", # 「避けてる」を修正
-    "世間の常識とは違うことをする人が好きだ。",
-    "事前に計画を立てて、その通りに行動するようにしている。",
-    "相手が期待に応えてくれないとき、イライラして怒ることがある。",
-    "リーダーシップを発揮できる。",
-    "結局は大したことのないことでよく心配する。", # 末尾に「。」を追加
-    "いくら大金でも、賄賂は受け取るつもりはない。",
-    "絵画や写真の感情的な側面にほとんど気づかない。",
-    "物を元の場所に戻すのをよく忘れる。",
-    "他人のミスにイライラする。",
-    "社交的なやり取りが多い仕事は苦手だろう。",
-    "誰かに守られたいと感じる。",
-    "高いブランド品とか持ってると、すごく幸せな気分になる。",
-    "何かを深く調べて探求することはないだろう。",
-    "仕事に厳密さを求める。",
-    "ちょっとしたことでイライラしやすい。",
-    "よく声を出して笑う。",
-    "他の人の感情を自分のことのように感じる。",
-    "自分は普通の人よりも注目される存在だと思う。",
-    "想像力があまり豊かではない。",
-    "細部にこだわる。",
-    "めったに文句や不満を言わない。",
-    "勢いよく、賑やかに笑う。",
-    "危険な状況に直面すると震えが止まらない。",
-    "何かを頼むために、その人のことが好きなフリはしたくない。",
-    "哲学など抽象的なことには興味がない。",
-    "計画に従って物事を進める。",
-    "自分が整理したものを他人が変えるとイライラする。",
-    "他人に話しかけるのが難しいと感じることがある。",
-    "他人の必要としていることに対して敏感に反応する。",
-    "捕まる心配がないなら、偽札使ってみたい気がする。"
-]
 
+# --- ルート設定 ---
 
 @app.get("/", response_class=HTMLResponse)
-async def show_questions(request: Request):
-    # 質問リストをHTMLテンプレートに渡して表示する
-    return templates.TemplateResponse("index.html", {
-        "request": request,
-        "questions": enumerate(hexaco_questions, 1) # 1から番号を振る
-    })
+async def root(request: Request):
+    """
+    トップページ。ログインしていればタイムラインへ、していなければログインページへリダイレクトする。
+    """
+    if 'user_did' in request.session:
+        return RedirectResponse(url="/timeline", status_code=302)
+    return RedirectResponse(url="/login", status_code=302)
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_form(request: Request):
+    """
+    ログインフォームを表示する。
+    """
+    return templates.TemplateResponse("login.html", {"request": request})
+
+
+@app.post("/login")
+async def login_process(request: Request, handle: str = Form(...), app_password: str = Form(...)):
+    """
+    フォームから送信された情報でログイン処理を行う。
+    """
+    # timeline_checker を使ってログインを試みる
+    user_profile = timeline_checker.verify_login_and_get_profile(handle, app_password)
+
+    if user_profile:
+        # ログイン成功
+        # セッションにユーザー情報を保存
+        request.session['user_did'] = user_profile['did']
+        request.session['user_handle'] = user_profile['handle']
+        request.session['user_display_name'] = user_profile['display_name']
+
+        # データベースに診断結果があるか確認
+        result = database.get_user_result(user_profile['did'])
+        if result:
+            # 診断済みならタイムラインへ
+            return RedirectResponse(url="/timeline", status_code=303)
+        else:
+            # 未診断なら診断ページへ
+            return RedirectResponse(url="/quiz", status_code=303)
+    else:
+        # ログイン失敗
+        # エラーメッセージ付きでログインページを再表示
+        return templates.TemplateResponse("login.html", {"request": request, "error": "ハンドルまたはアプリパスワードが間違っています。"})
+
+
+@app.get("/quiz", response_class=HTMLResponse)
+async def quiz_form(request: Request):
+    """
+    性格診断の質問ページを表示する。
+    """
+    if 'user_did' not in request.session:
+        return RedirectResponse(url="/login", status_code=302)
+    
+    questions = quiz_checker.QUESTIONS_DATA # 質問リストを取得
+    return templates.TemplateResponse("quiz.html", {"request": request, "questions": questions})
+
 
 @app.post("/submit")
-async def handle_submit(answers: List[str] = Form(...)):
-    # ここで回答を受け取る処理を将来的に書く
-    # 今は単純に受け取った回答を表示するだけ
-    return {"answers": answers}
+async def submit_quiz(request: Request):
+    """
+    性格診断の回答を処理し、データベースに保存する。
+    """
+    if 'user_did' not in request.session:
+        return RedirectResponse(url="/login", status_code=302)
+
+    form_data = await request.form()
+    
+    # フォームデータから回答をリストに変換
+    answers = []
+    for i in range(1, len(quiz_checker.QUESTIONS_DATA) + 1):
+        answer = form_data.get(f'q{i}')
+        if answer:
+            answers.append(int(answer))
+    
+    # 全問回答されているかチェック
+    if len(answers) == len(quiz_checker.QUESTIONS_DATA):
+        # スコアを計算
+        scores = quiz_checker.calculate_scores(answers)
+        
+        # データベースに保存
+        user_did = request.session['user_did']
+        user_handle = request.session['user_handle']
+        database.add_or_update_hexaco_result(user_did, user_handle, scores)
+        
+        # タイムラインページへリダイレクト
+        return RedirectResponse(url="/timeline", status_code=303)
+    else:
+        # 回答が不完全な場合、エラーメッセージ付きでクイズページを再表示
+        questions = quiz_checker.QUESTIONS_DATA
+        return templates.TemplateResponse(
+            "quiz.html", 
+            {
+                "request": request, 
+                "questions": questions,
+                "error": "すべての質問に回答してください。"
+            }
+        )
+
+
+@app.get("/timeline", response_class=HTMLResponse)
+async def show_timeline(request: Request):
+    """
+    パーソナライズされたタイムラインを表示する（準備段階）。
+    """
+    if 'user_did' not in request.session:
+        return RedirectResponse(url="/login", status_code=302)
+        
+    user_info = {
+        "did": request.session['user_did'],
+        "handle": request.session['user_handle'],
+        "display_name": request.session['user_display_name']
+    }
+
+    # ここに将来的にタイムライン取得とフィルタリングのロジックが入る
+    # timeline = timeline_checker.get_timeline_data(...)
+    # filtered_timeline = filter_logic(timeline, scores)
+
+    return templates.TemplateResponse("timeline.html", {"request": request, "user": user_info})
+
+
+@app.get("/logout")
+async def logout(request: Request):
+    """
+    ログアウト処理。セッションをクリアしてログインページに戻す。
+    """
+    request.session.clear()
+    return RedirectResponse(url="/login", status_code=303)
