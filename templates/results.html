@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>診断結果</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Noto Sans JP', sans-serif; background-color: #f7f9fc; color: #333; margin: 0; padding: 2rem; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 8px 25px rgba(0,0,0,0.08); }
+        h1, h2 { text-align: center; }
+        
+        .chart-container {
+            position: relative;
+            width: 90%;
+            max-width: 550px;
+            margin: 2rem auto;
+        }
+
+        .result-card { border: 1px solid #ddd; border-radius: 8px; margin-bottom: 1.5rem; padding: 1.5rem; }
+        .trait-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #eee; padding-bottom: 0.5rem; margin-bottom: 1rem; }
+        /* --- スコアの背景色を青に戻す --- */
+        .trait-name { font-size: 1.5em; font-weight: 700; color: #333; }
+        .trait-score { font-size: 1.2em; font-weight: 500; background-color: #007bff; color: white; padding: 0.3rem 0.8rem; border-radius: 1rem; }
+        /* --- 説明のH3の色を青に戻す --- */
+        .description h3 { font-size: 1.1em; color: #007bff; margin-top: 0; }
+        .description p { line-height: 1.7; }
+        .footer-nav { text-align: center; margin-top: 2rem; }
+        .button { display: inline-block; background-color: #2ecc71; color: white; padding: 0.8rem 1.5rem; border-radius: 5px; text-decoration: none; font-weight: 600; transition: background-color 0.2s; }
+        .button:hover { background-color: #27ae60; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>HEXACO-JPモデル性格診断の結果</h1>
+
+        <div class="chart-container">
+            <canvas id="hexacoChart"></canvas>
+        </div>
+
+        {% for trait, score in scores.items() %}
+            <div class="result-card">
+                <div class="trait-header">
+                    <span class="trait-name">{{ descriptions[trait].name }}</span>
+                    <span class="trait-score">スコア: {{ "%.2f"|format(score) }}</span>
+                </div>
+                
+                {% set level = 'high' if score >= 3.0 else 'low' %}
+                
+                <div class="description">
+                    <h3>どのような性格？</h3>
+                    <p>{{ descriptions[trait][level].personality }}</p>
+                    <h3>どのような投稿が苦手？</h3>
+                    <p>{{ descriptions[trait][level].posts }}</p>
+                </div>
+            </div>
+        {% endfor %}
+
+        <div class="footer-nav">
+            <a href="/timeline" class="button">タイムラインへ進む</a>
+        </div>
+    </div>
+
+    <script>
+        const scoresData = {{ scores | tojson }};
+
+        const chartLabels = [
+            'H(正直さ-謙虚さ)',
+            'E(情緒性)',
+            'X(外向性)',
+            'A(協調性)',
+            'C(誠実性)',
+            'O(開放性)'
+        ];
+
+        const chartData = {
+            labels: chartLabels,
+            datasets: [{
+                label: '性格診断結果',
+                data: [
+                    scoresData.H,
+                    scoresData.E,
+                    scoresData.X,
+                    scoresData.A,
+                    scoresData.C,
+                    scoresData.O
+                ],
+                fill: true,
+                backgroundColor: 'rgba(54, 162, 235, 0.2)', // 塗りつぶし: 青(半透明)
+                borderColor: 'rgb(54, 162, 235)',         // 線: 青
+                pointBackgroundColor: 'rgb(54, 162, 235)', // 点: 青
+                pointBorderColor: '#fff',
+                pointHoverBackgroundColor: '#fff',
+                pointHoverBorderColor: 'rgb(54, 162, 235)'
+            }]
+        };
+
+        const chartConfig = {
+            type: 'radar',
+            data: chartData,
+            options: {
+                elements: {
+                    line: {
+                        borderWidth: 3
+                    }
+                },
+                scales: {
+                    r: {
+                        angleLines: {
+                            display: true
+                        },
+                        suggestedMin: 0,
+                        suggestedMax: 5,
+                        pointLabels: {
+                            font: {
+                                size: 13
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        const ctx = document.getElementById('hexacoChart').getContext('2d');
+        new Chart(ctx, chartConfig);
+    </script>
+
+</body>
+</html>
