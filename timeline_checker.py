@@ -19,15 +19,17 @@ def verify_login_and_get_profile(handle: str, app_password: str):
         return None
 
 
-def get_timeline_data(handle: str, app_password: str, limit: int = 30):
+def get_timeline_data(handle: str, app_password: str, limit: int = 50):
     """
-    指定されたアカウント情報でログインし、タイムラインのデータを取得して返す。
-    成功した場合は投稿のリスト、失敗した場合はNoneを返す。
+    指定されたアカウント情報でログインし、フォローしている人のタイムラインを取得して返す。
     """
     client = Client()
     try:
         client.login(handle, app_password)
+        
+        # ▼▼▼ 以前の get_timeline() を使うコードに戻します ▼▼▼
         response = client.get_timeline(limit=limit)
+        
         return response.feed
     except Exception as e:
         print(f"タイムライン取得エラー: {e}")

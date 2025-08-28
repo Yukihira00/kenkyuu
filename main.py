@@ -1,3 +1,4 @@
+from datetime import datetime
 import secrets
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -121,26 +122,45 @@ async def submit_quiz(request: Request):
         )
 
 
+
+
 @app.get("/timeline", response_class=HTMLResponse)
 async def show_timeline(request: Request):
     """
-    パーソナライズされたタイムラインを表示する（準備段階）。
+    パーソナライズされたタイムラインを表示する。
     """
     if 'user_did' not in request.session:
         return RedirectResponse(url="/login", status_code=302)
-        
+    
+    # ▼▼▼ .get() を使って、より安全にセッションからデータを取得する ▼▼▼
+    # 表示名があればそれを使い、なければハンドルを'display_name'として使う
+    display_name = request.session.get('user_display_name') or request.session.get('user_handle')
+
     user_info = {
-        "did": request.session['user_did'],
-        "handle": request.session['user_handle'],
-        "display_name": request.session['user_display_name']
+        "did": request.session.get('user_did'),
+        "handle": request.session.get('user_handle'),
+        "display_name": display_name
     }
+    # ▲▲▲ ここまで ▲▲▲
 
-    # ここに将来的にタイムライン取得とフィルタリングのロジックが入る
-    # timeline = timeline_checker.get_timeline_data(...)
-    # filtered_timeline = filter_logic(timeline, scores)
+    handle = request.session.get('user_handle')
+    app_password = request.session.get('app_password')
 
-    return templates.TemplateResponse("timeline.html", {"request": request, "user": user_info})
+    feed_data = None
+    if handle and app_password:
+        feed_data = timeline_checker.get_timeline_data(handle, app_password, limit=100)
 
+    if feed_data:
+        for item in feed_data:
+            if isinstance(item.post.indexed_at, str):
+                dt_str = item.post.indexed_at.replace('Z', '+00:00')
+                item.post.indexed_at = datetime.fromisoformat(dt_str)
+
+    return templates.TemplateResponse("timeline.html", {
+        "request": request,
+        "user": user_info,
+        "feed": feed_data
+    })
 
 @app.get("/logout")
 async def logout(request: Request):
