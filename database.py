@@ -28,7 +28,7 @@ def initialize_database():
     conn = get_connection()
     cursor = conn.cursor()
 
-    # 1. users テーブルの作成
+    # (users, hexaco_results テーブルの作成は変更なし)
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS users (
         user_did TEXT PRIMARY KEY,
@@ -37,29 +37,25 @@ def initialize_database():
     )
     ''')
 
-    # 2. hexaco_results テーブルの作成
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS hexaco_results (
         result_id SERIAL PRIMARY KEY,
         user_did TEXT NOT NULL,
-        H REAL NOT NULL,
-        E REAL NOT NULL,
-        X REAL NOT NULL,
-        A REAL NOT NULL,
-        C REAL NOT NULL,
-        O REAL NOT NULL,
+        H REAL NOT NULL, E REAL NOT NULL, X REAL NOT NULL,
+        A REAL NOT NULL, C REAL NOT NULL, O REAL NOT NULL,
         diagnosed_at TIMESTAMPTZ NOT NULL,
         FOREIGN KEY (user_did) REFERENCES users (user_did)
     )
     ''')
     
-    # 3. filter_settings テーブルの作成 (★ここが重要★)
+    # ★★★ filter_settings テーブルの構造を変更 ★★★
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS filter_settings (
         setting_id SERIAL PRIMARY KEY,
         user_did TEXT NOT NULL UNIQUE,
-        hidden_topics TEXT[] NOT NULL,
-        hidden_tones TEXT[] NOT NULL,
+        hidden_content_categories TEXT[] NOT NULL,
+        hidden_expression_categories TEXT[] NOT NULL,
+        hidden_style_stance_categories TEXT[] NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL,
         FOREIGN KEY (user_did) REFERENCES users (user_did)
     )
@@ -121,7 +117,8 @@ def get_user_filter_settings(user_did: str):
     conn = get_connection()
     cursor = conn.cursor()
     
-    cursor.execute("SELECT hidden_topics, hidden_tones FROM filter_settings WHERE user_did = %s", (user_did,))
+    # ★★★ 取得するカラム名を変更 ★★★
+    cursor.execute("SELECT hidden_content_categories, hidden_expression_categories, hidden_style_stance_categories FROM filter_settings WHERE user_did = %s", (user_did,))
     settings = cursor.fetchone()
     
     cursor.close()
@@ -130,22 +127,29 @@ def get_user_filter_settings(user_did: str):
     if settings:
         return settings
     else:
-        return {'hidden_topics': [], 'hidden_tones': []}
+        # ★★★ デフォルトの戻り値のキーを変更 ★★★
+        return {
+            'hidden_content_categories': [],
+            'hidden_expression_categories': [],
+            'hidden_style_stance_categories': []
+        }
 
-def save_user_filter_settings(user_did: str, topics: list[str], tones: list[str]):
+def save_user_filter_settings(user_did: str, content: list[str], expression: list[str], style: list[str]):
     """ユーザーのフィルター設定を保存または更新する"""
     conn = get_connection()
     cursor = conn.cursor()
     now = datetime.now()
     
+    # ★★★ 保存するクエリと変数を変更 ★★★
     cursor.execute('''
-        INSERT INTO filter_settings (user_did, hidden_topics, hidden_tones, updated_at)
-        VALUES (%s, %s, %s, %s)
+        INSERT INTO filter_settings (user_did, hidden_content_categories, hidden_expression_categories, hidden_style_stance_categories, updated_at)
+        VALUES (%s, %s, %s, %s, %s)
         ON CONFLICT (user_did) DO UPDATE SET
-            hidden_topics = EXCLUDED.hidden_topics,
-            hidden_tones = EXCLUDED.hidden_tones,
+            hidden_content_categories = EXCLUDED.hidden_content_categories,
+            hidden_expression_categories = EXCLUDED.hidden_expression_categories,
+            hidden_style_stance_categories = EXCLUDED.hidden_style_stance_categories,
             updated_at = EXCLUDED.updated_at
-    ''', (user_did, topics, tones, now))
+    ''', (user_did, content, expression, style, now))
     
     conn.commit()
     cursor.close()

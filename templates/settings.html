@@ -9,54 +9,145 @@
         .container { max-width: 900px; margin: 0 auto; background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 8px 25px rgba(0,0,0,0.08); }
         h1 { text-align: center; }
         .settings-form { margin-top: 2rem; }
-        .category-group { margin-bottom: 2rem; }
-        .category-group h2 { font-size: 1.5em; border-bottom: 2px solid #eee; padding-bottom: 0.5rem; margin-bottom: 1rem; }
-        .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.8rem; }
-        .checkbox-item { display: flex; align-items: center; }
-        .checkbox-item input { margin-right: 0.5rem; }
+        .axis-group { margin-bottom: 2.5rem; }
+        .axis-group > h2 { font-size: 1.6em; border-bottom: 2px solid #007bff; color: #007bff; padding-bottom: 0.5rem; margin-bottom: 1.5rem; }
+        .category-group { margin-bottom: 1.5rem; }
+        .category-group h3 { font-size: 1.2em; color: #333; margin-bottom: 1rem; padding-left: 0.5rem; border-left: 4px solid #007bff; }
+        .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.8rem; padding-left: 1rem; }
+        
+        /* ★★★ labelタグがクリック範囲になるようにスタイルを調整 ★★★ */
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            cursor: pointer; /* カーソルをポインターに */
+            padding: 2px;
+        }
+        .checkbox-label input {
+            margin-right: 0.7rem; /* 文字とチェックボックスの間隔を調整 */
+        }
+
         .button-container { text-align: center; margin-top: 2rem; }
         .button { background-color: #007bff; color: white; padding: 0.8rem 2rem; border-radius: 5px; border: none; font-size: 1.1em; cursor: pointer; transition: background-color 0.2s; }
         .button:hover { background-color: #0056b3; }
         .nav-link { display: block; text-align: center; margin-top: 1rem; }
+
+        .success-message {
+            text-align: center;
+            color: #27ae60;
+            font-weight: 500;
+            margin-top: 1rem;
+            background-color: #e9f7ef;
+            padding: 0.8rem;
+            border-radius: 5px;
+            border: 1px solid #a7d7c5;
+            /* 最初は非表示にしておく */
+            display: none; 
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>フィルター設定</h1>
-        <p style="text-align: center;">非表示にしたい投稿の「トピック」や「トーン」を選択してください。</p>
+        <p style="text-align: center;">非表示にしたい投稿のカテゴリを選択してください。</p>
 
-        <form class="settings-form" action="/settings" method="post">
-            <div class="category-group">
-                <h2>トピック (内容・話題)</h2>
-                <div class="checkbox-grid">
-                    {% for topic in all_topics %}
-                    <div class="checkbox-item">
-                        <input type="checkbox" name="hidden_topics" value="{{ topic }}" id="topic-{{ loop.index }}"
-                               {% if topic in user_settings.hidden_topics %}checked{% endif %}>
-                        <label for="topic-{{ loop.index }}">{{ topic }}</label>
+        <form class="settings-form" id="settings-form" action="/settings" method="post">
+            
+            <div class="axis-group">
+                <h2>【軸1】コンテンツカテゴリ</h2>
+                {% for group_name, items in all_content_categories.items() %}
+                <div class="category-group">
+                    <h3>{{ group_name }}</h3>
+                    <div class="checkbox-grid">
+                        {% for item in items %}
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="hidden_content" value="{{ item }}"
+                                   {% if item in user_settings.hidden_content_categories %}checked{% endif %}>
+                            {{ item }}
+                        </label>
+                        {% endfor %}
                     </div>
-                    {% endfor %}
                 </div>
+                {% endfor %}
             </div>
 
-            <div class="category-group">
-                <h2>トーン (雰囲気・感情)</h2>
-                <div class="checkbox-grid">
-                    {% for tone in all_tones %}
-                    <div class="checkbox-item">
-                        <input type="checkbox" name="hidden_tones" value="{{ tone }}" id="tone-{{ loop.index }}"
-                               {% if tone in user_settings.hidden_tones %}checked{% endif %}>
-                        <label for="tone-{{ loop.index }}">{{ tone }}</label>
+            <div class="axis-group">
+                <h2>【軸2】表現カテゴリ</h2>
+                {% for group_name, items in all_expression_categories.items() %}
+                <div class="category-group">
+                    <h3>{{ group_name }}</h3>
+                    <div class="checkbox-grid">
+                        {% for item in items %}
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="hidden_expression" value="{{ item }}"
+                                   {% if item in user_settings.hidden_expression_categories %}checked{% endif %}>
+                            {{ item }}
+                        </label>
+                        {% endfor %}
                     </div>
-                    {% endfor %}
                 </div>
+                {% endfor %}
+            </div>
+
+            <div class="axis-group">
+                <h2>【軸3】文体・スタンスカテゴリ</h2>
+                {% for group_name, items in all_style_stance_categories.items() %}
+                <div class="category-group">
+                    <h3>{{ group_name }}</h3>
+                    <div class="checkbox-grid">
+                        {% for item in items %}
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="hidden_style_stance" value="{{ item }}"
+                                   {% if item in user_settings.hidden_style_stance_categories %}checked{% endif %}>
+                            {{ item }}
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
             </div>
 
             <div class="button-container">
                 <button type="submit" class="button">設定を保存</button>
             </div>
+
+            <div class="success-message" id="success-msg">
+                ✅ 設定を保存しました！
+            </div>
+
         </form>
         <a href="/timeline" class="nav-link">タイムラインに戻る</a>
     </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', (event) => {
+            // 1. スクロール位置を復元する処理
+            const scrollpos = localStorage.getItem('scrollpos');
+            if (scrollpos) {
+                window.scrollTo(0, parseInt(scrollpos, 10));
+                localStorage.removeItem('scrollpos');
+            }
+
+            // 2. フォーム送信時にスクロール位置を保存する処理
+            const form = document.getElementById('settings-form');
+            if (form) {
+                form.addEventListener('submit', () => {
+                    localStorage.setItem('scrollpos', window.scrollY);
+                });
+            }
+
+            // 3. 保存成功メッセージがあれば表示する処理
+            // (Pythonから `save_success` フラグが渡された場合のみ実行)
+            {% if save_success %}
+                const successMsg = document.getElementById('success-msg');
+                if (successMsg) {
+                    successMsg.style.display = 'block';
+                    // 3秒後にメッセージを消す
+                    setTimeout(() => {
+                        successMsg.style.display = 'none';
+                    }, 3000);
+                }
+            {% endif %}
+        });
+    </script>
 </body>
 </html>

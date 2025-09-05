@@ -215,17 +215,19 @@ async def show_settings(request: Request):
     # ユーザーの現在の設定を取得
     user_settings = database.get_user_filter_settings(user_did)
     
-    # llm_analyzerからカテゴリリストを取得
-    all_topics = llm_analyzer.TOPIC_CATEGORIES
-    all_tones = llm_analyzer.TONE_CATEGORIES
+    # ★★★ llm_analyzerから階層化されたカテゴリリストを取得 ★★★
+    all_content_categories = llm_analyzer.CONTENT_CATEGORIES
+    all_expression_categories = llm_analyzer.EXPRESSION_CATEGORIES
+    all_style_stance_categories = llm_analyzer.STYLE_STANCE_CATEGORIES
     
     return templates.TemplateResponse(
         "settings.html",
         {
             "request": request,
             "user_settings": user_settings,
-            "all_topics": all_topics,
-            "all_tones": all_tones
+            "all_content_categories": all_content_categories,
+            "all_expression_categories": all_expression_categories,
+            "all_style_stance_categories": all_style_stance_categories,
         }
     )
 
@@ -241,11 +243,31 @@ async def save_settings(request: Request):
     form_data = await request.form()
     
     # フォームからチェックされたリストを取得
-    hidden_topics = form_data.getlist("hidden_topics")
-    hidden_tones = form_data.getlist("hidden_tones")
+    hidden_content = form_data.getlist("hidden_content")
+    hidden_expression = form_data.getlist("hidden_expression")
+    hidden_style_stance = form_data.getlist("hidden_style_stance")
     
     # データベースに保存
-    database.save_user_filter_settings(user_did, hidden_topics, hidden_tones)
+    database.save_user_filter_settings(user_did, hidden_content, hidden_expression, hidden_style_stance)
     
-    # タイムラインにリダイレクト
-    return RedirectResponse(url="/timeline", status_code=303)
+    # --- ここが重要です ---
+    # ページを移動させず、成功メッセージを付けて再描画します
+    
+    # ページ再描画用のデータを再度取得
+    user_settings = database.get_user_filter_settings(user_did)
+    all_content_categories = llm_analyzer.CONTENT_CATEGORIES
+    all_expression_categories = llm_analyzer.EXPRESSION_CATEGORIES
+    all_style_stance_categories = llm_analyzer.STYLE_STANCE_CATEGORIES
+    
+    # settings.html を再度表示する
+    return templates.TemplateResponse(
+        "settings.html",
+        {
+            "request": request,
+            "user_settings": user_settings,
+            "all_content_categories": all_content_categories,
+            "all_expression_categories": all_expression_categories,
+            "all_style_stance_categories": all_style_stance_categories,
+            "save_success": True  # 成功メッセージを表示するためのフラグ
+        }
+    )

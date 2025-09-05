@@ -12,34 +12,62 @@ API_KEY = os.getenv('GEMINI_API_KEY')
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel('gemini-2.5-flash-lite')
 
-# --- あなたのカテゴリ案に基づき、50個の選択肢を定義 ---
+# --- 新しい3軸のカテゴリ定義 ---
 
-# 「内容・トピック」による分類 (50項目)
-TOPIC_CATEGORIES = [
-    "食事・グルメ", "健康・ウェルネス", "美容・ファッション", "育児・家族", "ペット", "住まい・インテリア",
-    "個人の出来事", "ゲーム", "漫画・アニメ", "映画・ドラマ", "音楽", "読書", "スポーツ観戦", "アート・創作",
-    "アイドル・有名人", "国内旅行", "海外旅行", "地域情報・イベント", "乗り物", "キャリア・就職", "スキルアップ",
-    "学問・研究", "業界ニュース", "ニュース速報", "政治", "経済", "社会問題", "国際情勢", "ガジェット・デバイス",
-    "ソフトウェア・アプリ", "Webサービス", "AI・機械学習", "プログラミング", "商品レビュー", "おすすめ・推薦",
-    "セール・お得情報", "新商品情報", "事実の報告", "知識・ノウハウの共有", "イベントの告知", "個人的な見解",
-    "問題提起", "悩み相談", "単純な疑問", "専門的な質問", "個人的な日記", "進捗報告", "思考の整理", "挨拶", "その他"
-]
+# 【軸1】コンテンツカテゴリ（内容・トピック別）
+CONTENT_CATEGORIES = {
+    "暮らし (Life & Living)": [
+        "食事・料理", "住まい・暮らし", "お出かけ・旅行", "健康・ウェルネス",
+        "美容・ファッション", "買い物・消費", "家族・育児", "ペット"
+    ],
+    "趣味 (Hobbies & Interests)": [
+        "カルチャー（映画・音楽等）", "ゲーム", "スポーツ", "創作・表現",
+        "アウトドア", "学び・探求"
+    ],
+    "仕事と社会 (Work & Society)": [
+        "仕事・キャリア", "学習・スキル", "テクノロジー", "経済・金融",
+        "社会・時事", "人間関係"
+    ]
+}
 
-# 「感情・トーン・意図」による分類 (50項目)
-TONE_CATEGORIES = [
-    "喜び・幸福", "興奮・期待", "感謝・賞賛", "感動・心温まる", "安らぎ・癒やし", "満足・達成感", "愛情・友情",
-    "楽観的", "怒り・不満", "悲しみ・失望", "不安・恐怖", "批判・非難", "嫉妬・羨望", "後悔・反省", "疲労・倦怠感",
-    "無気力・退屈", "客観的・事実ベース", "淡々とした報告", "中立的な意見", "データの提示", "ユーモラス",
-    "皮肉・風刺", "自虐的", "面白い・滑稽", "冗談・ネタ", "真面目・専門的", "啓発的・教育的", "深刻・重大",
-    "公式発表", "丁寧・謙虚", "断定的・強い主張", "問いかけ・疑問提起", "意見の募集", "情報共有の意図",
-    "議論の喚起", "共感の希求", "娯楽の提供", "宣伝・販売促進", "自己PR", "記録・備忘録", "コミュニケーション",
-    "他者への返信", "応援・激励", "警告・注意喚起", "謝罪", "挑発的", "曖昧・婉曲的", "その他"
-]
+# 【軸2】表現カテゴリ（トーン・感情・目的別）
+EXPRESSION_CATEGORIES = {
+    "ポジティブ": ["喜び", "感謝", "感動", "祝福", "愛情", "賞賛", "興奮", "期待", "安らぎ", "癒やし"],
+    "ネガティブ": ["怒り", "不満", "悲しみ", "落胆", "不安", "心配", "後悔", "嫉妬", "軽蔑", "疲労"],
+    "ニュートラル": ["驚き", "発見", "懐かしさ", "共感", "寂しさ", "静かな気持ち"],
+    "情報共有・記録": ["ノウハウ・TIPS共有", "レビュー・評価", "まとめ・リスト", "体験談・レポート", "進捗報告"],
+    "意見・思考": ["意見表明", "主張", "考察・分析", "批評・問題提起", "自己内省", "決意表明"],
+    "コミュニケーション": ["質問・相談", "回答・返信", "呼びかけ・問いかけ", "雑談・つぶやき"],
+    "宣伝・告知": ["イベント告知", "商品・作品の宣伝", "自己紹介・PR", "募集"]
+}
+
+
+# 【軸3】文体・スタンスカテゴリ（文章の書き方別）
+STYLE_STANCE_CATEGORIES = {
+    "対人スタンス (Interpersonal Stance)": [
+        "上から目線 / 教示的", "自慢 / 誇示的", "皮肉 / 嫌味", "攻撃的 / 批判的",
+        "挑発的 / 扇動的", "謙虚 / 丁寧", "共感的 / 寄り添い", "フレンドリー / 親近感"
+    ],
+    "自己表現スタイル (Self-Expression Style)": [
+        "自虐的", "客観的 / 分析的", "断定的 / 主張的", "控えめ / 曖昧",
+        "論理的 / 構造的", "感情的 / 情熱的"
+    ],
+    "文体の特徴 (Writing Characteristics)": [
+        "ポエム / 詩的", "ユーモラス / 面白おかしい", "簡潔 / 箇条書き",
+        "口語体 / 話し言葉", "ですます調 / 敬体", "だである調 / 常体"
+    ]
+}
+
+# プロンプト用にカテゴリのリストを平坦化
+flat_content_categories = [item for sublist in CONTENT_CATEGORIES.values() for item in sublist]
+flat_expression_categories = [item for sublist in EXPRESSION_CATEGORIES.values() for item in sublist]
+flat_style_stance_categories = [item for sublist in STYLE_STANCE_CATEGORIES.values() for item in sublist]
+
 # -----------------------------------------------------------------
 
 def analyze_post_text(text: str):
     """
-    投稿テキストをGemini APIに送信し、トピックとトーンを分析して返す。
+    投稿テキストをGemini APIに送信し、3つの軸でカテゴリを分析して返す。
     """
     if not API_KEY:
         print("エラー: GEMINI_API_KEYが設定されていません。")
@@ -47,20 +75,27 @@ def analyze_post_text(text: str):
 
     # LLMへの指示（プロンプト）を作成
     prompt = f"""
-    以下のSNS投稿を分析し、最も適切な「トピック」と「トーン」をそれぞれ1つだけ選択して、JSON形式で回答してください。
+    以下のSNS投稿を分析し、3つの軸それぞれについて最も適切なカテゴリを1つだけ選択し、JSON形式で回答してください。
+
+    # 分析の軸:
+    1. content_category: 投稿の主要な内容・トピック
+    2. expression_category: 投稿に込められた感情、目的、スタイル
+    3. style_stance_category: 文章の書き方や他者へのスタンス
 
     # 制約:
-    - 「トピック」は必ず以下のリストから選択してください: {TOPIC_CATEGORIES}
-    - 「トーン」は必ず以下のリストから選択してください: {TONE_CATEGORIES}
-    - 回答はJSONオブジェクトのみとし、前後に説明文などを付けないでください。
+    - 「content_category」は必ず以下のリストから選択してください: {flat_content_categories}
+    - 「expression_category」は必ず以下のリストから選択してください: {flat_expression_categories}
+    - 「style_stance_category」は必ず以下のリストから選択してください: {flat_style_stance_categories}
+    - 回答はJSONオブジェクトのみとし、説明文などは一切含めないでください。
 
     # 投稿テキスト:
     "{text}"
 
     # 出力形式:
     {{
-      "topic": "（選択したトピック）",
-      "tone": "（選択したトーン）"
+      "content_category": "（選択したコンテンツカテゴリ）",
+      "expression_category": "（選択した表現カテゴリ）",
+      "style_stance_category": "（選択した文体・スタンスカテゴリ）"
     }}
     """
 
@@ -73,11 +108,10 @@ def analyze_post_text(text: str):
         if json_text.startswith("```json"):
             json_text = json_text[7:-3].strip()
         
-        # JSON文字列をPythonの辞書に変換
         analysis_result = json.loads(json_text)
         
         # 想定したキーが存在するかチェック
-        if "topic" in analysis_result and "tone" in analysis_result:
+        if "content_category" in analysis_result and "expression_category" in analysis_result and "style_stance_category" in analysis_result:
             return analysis_result
         else:
             print(f"エラー: LLMからのレスポンス形式が不正です。Response: {response.text}")
@@ -87,7 +121,7 @@ def analyze_post_text(text: str):
         print(f"LLMでの分析中にエラーが発生しました: {e}")
         return None
 
-# --- このファイル単体でテストするためのコード ---
+# (テスト用のコードは変更なし)
 if __name__ == '__main__':
     print("--- LLM分析テスト ---")
     
