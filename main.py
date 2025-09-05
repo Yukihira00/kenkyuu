@@ -10,6 +10,7 @@ import database
 import quiz_checker
 import timeline_checker
 import personality_descriptions
+import llm_analyzer
 
 # --- アプリケーションの初期設定 ---
 app = FastAPI()
@@ -200,3 +201,51 @@ async def show_results(request: Request):
             "descriptions": personality_descriptions.DESCRIPTIONS
         }
     )
+
+@app.get("/settings", response_class=HTMLResponse)
+async def show_settings(request: Request):
+    """
+    フィルター設定ページを表示する
+    """
+    if 'user_did' not in request.session:
+        return RedirectResponse(url="/login", status_code=302)
+    
+    user_did = request.session['user_did']
+    
+    # ユーザーの現在の設定を取得
+    user_settings = database.get_user_filter_settings(user_did)
+    
+    # llm_analyzerからカテゴリリストを取得
+    all_topics = llm_analyzer.TOPIC_CATEGORIES
+    all_tones = llm_analyzer.TONE_CATEGORIES
+    
+    return templates.TemplateResponse(
+        "settings.html",
+        {
+            "request": request,
+            "user_settings": user_settings,
+            "all_topics": all_topics,
+            "all_tones": all_tones
+        }
+    )
+
+@app.post("/settings")
+async def save_settings(request: Request):
+    """
+    フィルター設定を保存する
+    """
+    if 'user_did' not in request.session:
+        return RedirectResponse(url="/login", status_code=302)
+    
+    user_did = request.session['user_did']
+    form_data = await request.form()
+    
+    # フォームからチェックされたリストを取得
+    hidden_topics = form_data.getlist("hidden_topics")
+    hidden_tones = form_data.getlist("hidden_tones")
+    
+    # データベースに保存
+    database.save_user_filter_settings(user_did, hidden_topics, hidden_tones)
+    
+    # タイムラインにリダイレクト
+    return RedirectResponse(url="/timeline", status_code=303)

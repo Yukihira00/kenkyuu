@@ -10,7 +10,7 @@ API_KEY = os.getenv('GEMINI_API_KEY')
 
 # APIキーを使ってGeminiを設定
 genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel('gemini-2.5-flash-lite')
 
 # --- あなたのカテゴリ案に基づき、50個の選択肢を定義 ---
 

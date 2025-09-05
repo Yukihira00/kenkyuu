@@ -37,7 +37,7 @@ def initialize_database():
     )
     ''')
 
-    # 2. hexaco_results テーブルの作成 (PostgreSQLではSERIALで自動採番)
+    # 2. hexaco_results テーブルの作成
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS hexaco_results (
         result_id SERIAL PRIMARY KEY,
@@ -49,6 +49,18 @@ def initialize_database():
         C REAL NOT NULL,
         O REAL NOT NULL,
         diagnosed_at TIMESTAMPTZ NOT NULL,
+        FOREIGN KEY (user_did) REFERENCES users (user_did)
+    )
+    ''')
+    
+    # 3. filter_settings テーブルの作成 (★ここが重要★)
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS filter_settings (
+        setting_id SERIAL PRIMARY KEY,
+        user_did TEXT NOT NULL UNIQUE,
+        hidden_topics TEXT[] NOT NULL,
+        hidden_tones TEXT[] NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL,
         FOREIGN KEY (user_did) REFERENCES users (user_did)
     )
     ''')
@@ -64,8 +76,6 @@ def add_or_update_hexaco_result(user_did: str, handle: str, scores: dict):
     cursor = conn.cursor()
     now = datetime.now()
 
-    # ユーザーが存在するか確認し、存在しなければ追加する (UPSERT)
-    # PostgreSQLではプレースホルダに%sを使用
     cursor.execute('''
     INSERT INTO users (user_did, handle, created_at)
     VALUES (%s, %s, %s)
@@ -73,7 +83,6 @@ def add_or_update_hexaco_result(user_did: str, handle: str, scores: dict):
         handle = EXCLUDED.handle
     ''', (user_did, handle, now))
 
-    # 診断結果を追加する
     cursor.execute('''
     INSERT INTO hexaco_results (user_did, H, E, X, A, C, O, diagnosed_at)
     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
@@ -96,7 +105,7 @@ def get_user_result(user_did: str):
     LIMIT 1
     ''', (user_did,))
 
-    result = cursor.fetchone()  # resultはすでに辞書のようなオブジェクト
+    result = cursor.fetchone()
     cursor.close()
     conn.close()
 
@@ -107,27 +116,54 @@ def get_user_result(user_did: str):
         print(f"⚠️ ユーザー (did: ...{user_did[-6:]}) の診断結果はまだありません。")
         return None
 
-# --- このファイル単体で実行してテストするためのコード ---
-if __name__ == '__main__':
-    # 1. データベースを初期化（テーブルがなければ作成される）
-    initialize_database()
+def get_user_filter_settings(user_did: str):
+    """指定されたユーザーのフィルター設定を取得する"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT hidden_topics, hidden_tones FROM filter_settings WHERE user_did = %s", (user_did,))
+    settings = cursor.fetchone()
+    
+    cursor.close()
+    conn.close()
+    
+    if settings:
+        return settings
+    else:
+        return {'hidden_topics': [], 'hidden_tones': []}
 
-    # 2. ダミーのデータで保存テスト
+def save_user_filter_settings(user_did: str, topics: list[str], tones: list[str]):
+    """ユーザーのフィルター設定を保存または更新する"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    now = datetime.now()
+    
+    cursor.execute('''
+        INSERT INTO filter_settings (user_did, hidden_topics, hidden_tones, updated_at)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (user_did) DO UPDATE SET
+            hidden_topics = EXCLUDED.hidden_topics,
+            hidden_tones = EXCLUDED.hidden_tones,
+            updated_at = EXCLUDED.updated_at
+    ''', (user_did, topics, tones, now))
+    
+    conn.commit()
+    cursor.close()
+    conn.close()
+    print(f"✅ ユーザー (did: ...{user_did[-6:]}) のフィルター設定を保存しました。")
+
+if __name__ == '__main__':
+    initialize_database()
     print("\n--- データ保存テスト ---")
     dummy_scores = {'H': 3.0, 'E': 1.0, 'X': 2.2, 'A': 3.8, 'C': 1.8, 'O': 3.0}
     dummy_did = 'did:plc:xxxxxxxxxxxxxxxxx'
     dummy_handle = 'testuser.bsky.social'
     add_or_update_hexaco_result(dummy_did, dummy_handle, dummy_scores)
-
-    # 3. データ取得テスト
     print("\n--- データ取得テスト ---")
     saved_result = get_user_result(dummy_did)
     if saved_result:
         print("取得したスコア:")
-        # 辞書のキーは小文字になります
         print(f"  H: {saved_result['h']}, E: {saved_result['e']}, X: {saved_result['x']}")
         print(f"  A: {saved_result['a']}, C: {saved_result['c']}, O: {saved_result['o']}")
-
-    # 4. 存在しないユーザーのテスト
     print("\n--- 存在しないユーザーのテスト ---")
     get_user_result('did:plc:not-exist-user')
