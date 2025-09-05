@@ -4,59 +4,170 @@
     <meta charset="UTF-8">
     <title>タイムライン</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Noto Sans JP', sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; color: #1c1e21; }
-        .container { max-width: 680px; margin: 0 auto; }
-        .header { display: flex; justify-content: space-between; align-items: center; background: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        .header h1 { margin: 0; font-size: 1.2em; }
-        
-        /* ▼▼▼ ボタン用のスタイルを追加・修正 ▼▼▼ */
-        .header .nav-buttons { display: flex; gap: 10px; }
-        .header .nav-button { text-decoration: none; background-color: #e4e6eb; color: #1c1e21; padding: 8px 15px; border-radius: 5px; font-weight: 600; transition: background-color 0.2s; }
-        .header .nav-button:hover { background-color: #d8dbdf; }
-        .header .nav-button.logout { background-color: #e74c3c; color: white; }
-        .header .nav-button.logout:hover { background-color: #c0392b; }
-        /* ▲▲▲ ここまで ▲▲▲ */
+<style>
+    body { font-family: 'Noto Sans JP', sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; color: #1c1e21; }
+    .container { max-width: 680px; margin: 0 auto; }
+    
+    /* ▼▼▼ ハンバーガーメニュー用のスタイル ▼▼▼ */
+    .header { background: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; }
+    .header-top { display: flex; justify-content: space-between; align-items: center; }
+    .header h1 { margin: 0; font-size: 1.2em; }
 
-        .post { background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 15px; padding: 15px 20px; }
-        .post-author { display: flex; align-items: center; margin-bottom: 10px; }
-        .post-author img { width: 40px; height: 40px; border-radius: 50%; margin-right: 10px; }
-        .author-info { display: flex; flex-direction: column; }
-        .author-info strong { font-size: 1em; }
-        .author-info span { font-size: 0.9em; color: #65676b; }
-        .post-content { white-space: pre-wrap; word-wrap: break-word; line-height: 1.5; }
-        
-        .post-images { margin-top: 15px; display: flex; gap: 5px; }
-        .post-images img { max-width: 100%; border-radius: 8px; border: 1px solid #ddd; flex: 1 1 0; cursor: pointer; transition: opacity 0.2s; }
-        .post-images img:hover { opacity: 0.8; }
+    .hamburger-menu {
+        position: relative;
+    }
 
-        .post-footer { font-size: 0.8em; color: #65676b; margin-top: 10px; text-align: right; }
-    </style>
+    .menu-btn {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-around;
+        width: 30px;
+        height: 25px; /* ボタン全体の高さを少し調整 */
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        padding: 0;
+        z-index: 1001;
+    }
+    .menu-btn span {
+        display: block;
+        width: 100%;
+        height: 3px;
+        background-color: #333;
+        border-radius: 3px;
+        transition: all 0.3s ease-in-out;
+    }
+
+    .nav-links {
+        list-style: none;
+        position: absolute;
+        top: 40px; /* ボタンからの距離 */
+        right: 0;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+        margin: 0;
+        padding: 10px 0;
+        width: 200px;
+        transform: translateY(-10px); /* 登場時のアニメーション */
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s;
+        z-index: 1000;
+    }
+    .nav-links.open {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+    }
+
+    .nav-links li a {
+        display: block;
+        padding: 12px 20px;
+        color: #333;
+        text-decoration: none;
+        font-weight: 500;
+        transition: background-color 0.2s;
+    }
+    .nav-links li a:hover {
+        background-color: #f0f2f5;
+    }
+    .nav-links .logout a {
+        color: #e74c3c;
+    }
+    .nav-links .logout a:hover {
+        background-color: #fbeae8;
+    }
+    /* ▲▲▲ ここまで ▲▲▲ */
+
+    /* (その他のスタイルは変更なし) */
+    .filter-status {
+        margin-top: 15px;
+        padding-top: 15px;
+        border-top: 1px solid #e4e6eb;
+        font-size: 0.95em;
+        color: #65676b;
+        text-align: center;
+    }
+
+    /* --- 投稿表示 --- */
+    .post { background: white; padding: 15px 20px; border-radius: 8px; }
+    .post-header { display: flex; align-items: center; margin-bottom: 12px; }
+    .post-avatar { width: 40px; height: 40px; border-radius: 50%; margin-right: 12px; }
+    .post-author-info { display: flex; flex-direction: column; }
+    .post-author { font-weight: bold; font-size: 1em; }
+    .post-handle { color: #65676b; font-size: 0.9em; }
+    .post-content { white-space: pre-wrap; word-wrap: break-word; line-height: 1.5; }
+    .post-images { margin-top: 15px; display: flex; gap: 5px; }
+    .post-images img { max-width: 100%; border-radius: 8px; border: 1px solid #ddd; flex: 1 1 0; cursor: pointer; transition: opacity 0.2s; }
+    .post-images img:hover { opacity: 0.8; }
+    .post-footer { font-size: 0.8em; color: #65676b; margin-top: 15px; text-align: right; }
+
+    /* --- モザイク表示 --- */
+    .post-mosaic-container { position: relative; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 15px; overflow: hidden; }
+    .post-content-hidden { filter: blur(8px) grayscale(50%); transition: filter 0.3s ease-in-out; }
+    .post-content-hidden.revealed { filter: none; }
+    .reveal-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: rgba(255, 255, 255, 0.5); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition: opacity 0.3s ease-in-out; z-index: 10; }
+    .reveal-overlay.hidden { opacity: 0; pointer-events: none; }
+    .reveal-button { background-color: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 1em; font-weight: 600; transition: background-color 0.2s; margin-bottom: 10px; }
+    .reveal-button:hover { background-color: #0056b3; }
+    .analysis-info { color: #333; background-color: rgba(255,255,255,0.7); padding: 5px 10px; border-radius: 5px; font-size: 0.85em; text-align: center; max-width: 80%; }
+    .analysis-info strong { color: #0056b3; }
+</style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>ようこそ, {{ user.display_name }} さん</h1>
-            <div class="nav-buttons">
-                <a href="/settings" class="nav-button">フィルター設定</a>
-                <a href="/logout" class="nav-button logout">ログアウト</a>
+            <div class="header-top">
+                <h1>ようこそ, {{ user.display_name }} さん</h1>
+                <div class="hamburger-menu">
+                    <button class="menu-btn" id="menu-btn">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </button>
+                    <ul class="nav-links" id="nav-links">
+                        <li><a href="/results">診断結果を見る</a></li>
+                        <li><a href="/settings">フィルター設定</a></li>
+                        <li class="logout"><a href="/logout">ログアウト</a></li>
+                    </ul>
+                </div>
             </div>
+
+            {% if total_post_count > 0 %}
+            <div class="filter-status">
+                直近{{ total_post_count }}件の投稿のうち、設定に基づいて <strong>{{ hidden_post_count }}</strong> 件の投稿をモザイク表示しました。
             </div>
+            {% endif %}
+        </div>
         
         {% if feed %}
             {% for item in feed %}
-                <div class="post">
-                    <div class="post-author">
-                        <img src="{{ item.post.author.avatar }}" alt="avatar">
-                        <div class="author-info">
-                            <strong>{{ item.post.author.display_name }}</strong>
-                            <span>@{{ item.post.author.handle }}</span>
-                        </div>
+                <div class="post-mosaic-container">
+                    
+                    {% if item.is_mosaic %}
+                    <div class="reveal-overlay">
+                        <button class="reveal-button">モザイクを解除して表示する</button>
+                        {% if item.analysis_info %}
+                            <div class="analysis-info">
+                                <strong>非表示理由:</strong><br>
+                                {{ item.analysis_info.content_category }}, {{ item.analysis_info.expression_category }}, {{ item.analysis_info.style_stance_category }}
+                            </div>
+                        {% endif %}
                     </div>
-                  <div class="post-content">{{ item.post.record.text }}</div>
+                    {% endif %}
 
-                    {% if item.post.embed %}
-                        {% if item.post.embed.py_type == 'app.bsky.embed.images#view' %}
+                    <div class="post {% if item.is_mosaic %}post-content-hidden{% endif %}">
+                        <div class="post-header">
+                            <img src="{{ item.post.author.avatar }}" alt="avatar" class="post-avatar">
+                            <div class="post-author-info">
+                                <strong class="post-author">{{ item.post.author.display_name }}</strong>
+                                <span class="post-handle">@{{ item.post.author.handle }}</span>
+                            </div>
+                        </div>
+                        <div class="post-content">{{ item.post.record.text }}</div>
+
+                        {% if item.post.embed and item.post.embed.py_type == 'app.bsky.embed.images#view' %}
                             <div class="post-images">
                                 {% for image in item.post.embed.images %}
                                     <a href="{{ image.fullsize }}" target="_blank">
@@ -65,18 +176,52 @@
                                 {% endfor %}
                             </div>
                         {% endif %}
-                    {% endif %}
-                    <div class="post-footer">
-                        投稿日時: {{ item.post.indexed_at.strftime('%Y-%m-%d %H:%M') }}
+                        <div class="post-footer">
+                            投稿日時: {{ item.post.indexed_at.strftime('%Y-%m-%d %H:%M') }}
+                        </div>
                     </div>
                 </div>
             {% endfor %}
         {% else %}
             <div class="post">
-                <p>タイムラインの読み込みに失敗したか、投稿がありません。</p>
+                <p>タイムラインの読み込みに失敗したか、表示できる投稿がありません。</p>
             </div>
         {% endif %}
-
     </div>
+
+    <script>
+        // ハンバーガーメニュー用のスクリプト
+        document.addEventListener('DOMContentLoaded', function() {
+            const menuBtn = document.getElementById('menu-btn');
+            const navLinks = document.getElementById('nav-links');
+
+            menuBtn.addEventListener('click', function() {
+                menuBtn.classList.toggle('open');
+                navLinks.classList.toggle('open');
+            });
+
+            document.addEventListener('click', function(event) {
+                const isClickInside = menuBtn.contains(event.target) || navLinks.contains(event.target);
+                if (!isClickInside && navLinks.classList.contains('open')) {
+                    menuBtn.classList.remove('open');
+                    navLinks.classList.remove('open');
+                }
+            });
+        });
+
+        // モザイク解除用のスクリプト
+        document.querySelectorAll('.reveal-button').forEach(button => {
+            button.addEventListener('click', function() {
+                const overlay = this.closest('.reveal-overlay');
+                // モザイクコンテナ内の post-content-hidden クラスを持つ要素を探す
+                const postContent = overlay.closest('.post-mosaic-container').querySelector('.post-content-hidden');
+                
+                if (overlay && postContent) {
+                    overlay.classList.add('hidden');
+                    postContent.classList.add('revealed');
+                }
+            });
+        });
+    </script>
 </body>
 </html>

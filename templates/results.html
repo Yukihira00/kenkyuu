@@ -9,20 +9,11 @@
         body { font-family: 'Noto Sans JP', sans-serif; background-color: #f7f9fc; color: #333; margin: 0; padding: 2rem; }
         .container { max-width: 800px; margin: 0 auto; background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 8px 25px rgba(0,0,0,0.08); }
         h1, h2 { text-align: center; }
-        
-        .chart-container {
-            position: relative;
-            width: 90%;
-            max-width: 550px;
-            margin: 2rem auto;
-        }
-
+        .chart-container { position: relative; width: 90%; max-width: 550px; margin: 2rem auto; }
         .result-card { border: 1px solid #ddd; border-radius: 8px; margin-bottom: 1.5rem; padding: 1.5rem; }
         .trait-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #eee; padding-bottom: 0.5rem; margin-bottom: 1rem; }
-        /* --- スコアの背景色を青に戻す --- */
         .trait-name { font-size: 1.5em; font-weight: 700; color: #333; }
         .trait-score { font-size: 1.2em; font-weight: 500; background-color: #007bff; color: white; padding: 0.3rem 0.8rem; border-radius: 1rem; }
-        /* --- 説明のH3の色を青に戻す --- */
         .description h3 { font-size: 1.1em; color: #007bff; margin-top: 0; }
         .description p { line-height: 1.7; }
         .footer-nav { text-align: center; margin-top: 2rem; }
@@ -57,38 +48,33 @@
         {% endfor %}
 
         <div class="footer-nav">
-            <a href="/timeline" class="button">タイムラインへ進む</a>
+            <a href="/timeline" class="button">タイムラインへ戻る</a>
         </div>
     </div>
 
     <script>
-        const scoresData = ({ scores : tojson });
+        // サーバーから渡されたスコアデータをJSONとして受け取ります
+        console.log('この行のエラーは無視されます');
+        const scoresData = {{ scores | tojson }};
 
         const chartLabels = [
-            'H(正直さ-謙虚さ)',
-            'E(情緒性)',
-            'X(外向性)',
-            'A(協調性)',
-            'C(誠実性)',
-            'O(開放性)'
+            'H(正直さ-謙虚さ)', 'E(情緒性)', 'X(外向性)',
+            'A(協調性)', 'C(誠実性)', 'O(開放性)'
         ];
 
         const chartData = {
             labels: chartLabels,
             datasets: [{
                 label: '性格診断結果',
+                // scoresDataから大文字のキーで各スコアを取得します
                 data: [
-                    scoresData.H,
-                    scoresData.E,
-                    scoresData.X,
-                    scoresData.A,
-                    scoresData.C,
-                    scoresData.O
+                    scoresData.H, scoresData.E, scoresData.X,
+                    scoresData.A, scoresData.C, scoresData.O
                 ],
                 fill: true,
-                backgroundColor: 'rgba(54, 162, 235, 0.2)', // 塗りつぶし: 青(半透明)
-                borderColor: 'rgb(54, 162, 235)',         // 線: 青
-                pointBackgroundColor: 'rgb(54, 162, 235)', // 点: 青
+                backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                borderColor: 'rgb(54, 162, 235)',
+                pointBackgroundColor: 'rgb(54, 162, 235)',
                 pointBorderColor: '#fff',
                 pointHoverBackgroundColor: '#fff',
                 pointHoverBorderColor: 'rgb(54, 162, 235)'
@@ -100,27 +86,20 @@
             data: chartData,
             options: {
                 elements: {
-                    line: {
-                        borderWidth: 3
-                    }
+                    line: { borderWidth: 3 }
                 },
                 scales: {
                     r: {
-                        angleLines: {
-                            display: true
-                        },
+                        angleLines: { display: true },
                         suggestedMin: 0,
                         suggestedMax: 5,
-                        pointLabels: {
-                            font: {
-                                size: 13
-                            }
-                        }
+                        pointLabels: { font: { size: 13 } }
                     }
                 }
             }
         };
 
+        // canvas要素を取得してグラフを描画します
         const ctx = document.getElementById('hexacoChart').getContext('2d');
         new Chart(ctx, chartConfig);
     </script>

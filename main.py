@@ -132,35 +132,87 @@ async def show_timeline(request: Request):
     """
     if 'user_did' not in request.session:
         return RedirectResponse(url="/login", status_code=302)
-    
-    # ▼▼▼ .get() を使って、より安全にセッションからデータを取得する ▼▼▼
-    # 表示名があればそれを使い、なければハンドルを'display_name'として使う
-    display_name = request.session.get('user_display_name') or request.session.get('user_handle')
 
-    user_info = {
-        "did": request.session.get('user_did'),
-        "handle": request.session.get('user_handle'),
-        "display_name": display_name
-    }
-    # ▲▲▲ ここまで ▲▲▲
-
+    user_did = request.session['user_did']
     handle = request.session.get('user_handle')
     app_password = request.session.get('app_password')
 
-    feed_data = None
-    if handle and app_password:
-        feed_data = timeline_checker.get_timeline_data(handle, app_password, limit=100)
+    # --- 1. ユーザー情報を取得 ---
+    display_name = request.session.get('user_display_name') or handle
+    user_info = {
+        "did": user_did,
+        "handle": handle,
+        "display_name": display_name
+    }
 
-    if feed_data:
-        for item in feed_data:
+    # --- 2. ユーザーのフィルター設定を取得 ---
+    user_filter_settings = database.get_user_filter_settings(user_did)
+    hidden_content = set(user_filter_settings.get('hidden_content_categories', []))
+    hidden_expression = set(user_filter_settings.get('hidden_expression_categories', []))
+    hidden_style = set(user_filter_settings.get('hidden_style_stance_categories', []))
+
+    # --- 3. Blueskyからタイムラインを取得 ---
+    # raw_feed の取得件数を調整可能（例: 50件に減らすなど）
+    # LLM処理が増えるため、最初は少なめにするのがおすすめです
+    raw_feed = timeline_checker.get_timeline_data(handle, app_password, limit=50) 
+
+    if not raw_feed:
+        return templates.TemplateResponse("timeline.html", {
+            "request": request, "user": user_info, "feed": [],
+            "hidden_post_count": 0, "total_post_count": 0
+        })
+
+    # --- 4. 投稿を分析・モザイクフラグを設定 ---
+    processed_feed = [] # フィルタリング対象外も含む、処理済みのフィード
+    hidden_post_count = 0
+    total_post_count = len(raw_feed)
+
+    for item in raw_feed:
+        post_text = item.post.record.text
+        
+        # 投稿テキストが空の場合はモザイクなしでそのまま追加
+        if not post_text.strip():
+            # 日付形式を変換
             if isinstance(item.post.indexed_at, str):
                 dt_str = item.post.indexed_at.replace('Z', '+00:00')
                 item.post.indexed_at = datetime.fromisoformat(dt_str)
+            item.is_mosaic = False
+            item.analysis_info = None # 分析情報がないことを示す
+            processed_feed.append(item)
+            continue
 
+        # LLMで投稿を分析
+        analysis_result = llm_analyzer.analyze_post_text(post_text)
+        
+        item.is_mosaic = False # デフォルトはモザイクなし
+        item.analysis_info = analysis_result # LLMの分析結果を保持
+        
+        if analysis_result:
+            # いずれかのフィルターカテゴリに一致したらモザイクフラグを立てる
+            if analysis_result.get("content_category") in hidden_content:
+                item.is_mosaic = True
+            if analysis_result.get("expression_category") in hidden_expression:
+                item.is_mosaic = True
+            if analysis_result.get("style_stance_category") in hidden_style:
+                item.is_mosaic = True
+
+        if item.is_mosaic:
+            hidden_post_count += 1
+        
+        # 日付形式を変換（モザイク表示の有無にかかわらず行う）
+        if isinstance(item.post.indexed_at, str):
+            dt_str = item.post.indexed_at.replace('Z', '+00:00')
+            item.post.indexed_at = datetime.fromisoformat(dt_str)
+            
+        processed_feed.append(item)
+
+    # --- 5. テンプレートにデータを渡して表示 ---
     return templates.TemplateResponse("timeline.html", {
         "request": request,
         "user": user_info,
-        "feed": feed_data
+        "feed": processed_feed, # フィルタリング対象も含む全てを渡す
+        "hidden_post_count": hidden_post_count,
+        "total_post_count": total_post_count
     })
 
 @app.get("/logout")
@@ -171,6 +223,8 @@ async def logout(request: Request):
     request.session.clear()
     return RedirectResponse(url="/login", status_code=303)
 
+
+# main.py
 
 @app.get("/results", response_class=HTMLResponse)
 async def show_results(request: Request):
@@ -188,11 +242,13 @@ async def show_results(request: Request):
         return RedirectResponse(url="/quiz", status_code=302)
 
     # データベースから取得したスコアを整形
+    # ★★★ JavaScriptで使うため、必ず大文字のキーに変換します ★★★
     scores = {
-        'H': result['h'], 'E': result['e'], 'X': result['x'],
-        'A': result['a'], 'C': result['c'], 'O': result['o']
+        'H': result.get('h', 0), 'E': result.get('e', 0), 'X': result.get('x', 0),
+        'A': result.get('a', 0), 'C': result.get('c', 0), 'O': result.get('o', 0)
     }
 
+    # 整形したスコアと、性格の解説文をHTMLテンプレートに渡す
     return templates.TemplateResponse(
         "results.html", 
         {
