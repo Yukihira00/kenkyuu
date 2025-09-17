@@ -4,12 +4,14 @@ import json
 import re
 import google.generativeai as genai
 from dotenv import load_dotenv
+from sentence_transformers import SentenceTransformer
 
 load_dotenv(encoding='utf-8')
 API_KEY = os.getenv('GEMINI_API_KEY')
 
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
+embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 
 # --- カテゴリ定義 ---
 CONTENT_CATEGORIES = {
@@ -18,41 +20,41 @@ CONTENT_CATEGORIES = {
     "仕事と社会": ["仕事・キャリア", "学習・スキル", "テクノロジー", "経済・金融", "社会・時事", "人間関係"]
 }
 
-# 表現カテゴリを拡充
 EXPRESSION_CATEGORIES = [
     "肯定的", "中立・客観的", "懸念・不安", "悲しみ・失望", 
     "怒り・不満", "攻撃的", "ショッキング"
 ]
 
-# スタイル・スタンスカテゴリを大幅に拡充・細分化
 STYLE_STANCE_CATEGORIES = [
-    # ポジティブ・自己表現系
     "自慢・成功誇示", "感謝・ポジティブな感想", "ユーモア・ジョーク",
-    # ネガティブ・批判系
     "批判・反論", "愚痴・不平不満", "皮肉・冷笑", "過度な自虐",
-    # 主張・情報系
     "強い意見・主張", "教訓・アドバイス", "客観的な報告・告知", 
     "専門的な解説", "不正確・誤情報", "根拠のない陰謀論",
-    # 態度・姿勢系
     "扇情的な見出し（釣りタイトル）", "誇張・大げさな表現", "丁寧・謙虚", 
     "当たり障りのない意見", "内省的・思索的", "感情的な共感を求める",
-    # その他
     "その他"
 ]
-
 
 flat_content_categories = [item for sublist in CONTENT_CATEGORIES.values() for item in sublist]
 
 def analyze_posts_batch(texts: list[str]):
     error_result = {
-        "content_category": "分析失敗", "expression_category": "分析失敗", "style_stance_category": "分析失敗"
+        "content_category": "分析失敗", "expression_category": "分析失敗", 
+        "style_stance_category": "分析失敗", "embedding": None
     }
     if not API_KEY:
         print("エラー: GEMINI_API_KEYが設定されていません。")
         return [error_result] * len(texts)
+        
+    try:
+        embeddings = embedding_model.encode(texts).tolist()
+    except Exception as e:
+        print(f"テキストのベクトル化中にエラーが発生しました: {e}")
+        embeddings = [None] * len(texts)
 
     formatted_texts = "\n".join(f"投稿{i+1}:\n---\n{text}\n---" for i, text in enumerate(texts))
     
+    # ▼▼▼【変更】AIへの指示をより厳密に修正 ▼▼▼
     prompt = f"""
     以下のSNS投稿リスト（{len(texts)}件）を分析し、3つの軸で最も適切なカテゴリを1つずつ選択してください。
     回答は、JSONオブジェクトのリスト形式で、投稿の順番通りに出力してください。
@@ -68,8 +70,10 @@ def analyze_posts_batch(texts: list[str]):
     - "style_stance_category": {STYLE_STANCE_CATEGORIES}
 
     # 制約:
+    - 必ず投稿{len(texts)}件分、{len(texts)}個のJSONオブジェクトをリストに入れて返してください。
+    - 分析が困難な場合でも、カテゴリを「不明」として必ずオブジェクトを作成してください。
     - 回答はJSONリストのみとし、説明文は一切含めないでください。
-    - 各JSONオブジェクトには3つのキーを必ず含めてください。
+    - 各JSONオブジェクトには3つのキー（content_category, expression_category, style_stance_category）を必ず含めてください。
 
     # 投稿リスト:
     {formatted_texts}
@@ -88,14 +92,19 @@ def analyze_posts_batch(texts: list[str]):
             return [error_result] * len(texts)
         
         json_text = match.group(0)
-        analysis_results = json.loads(json_text)
+        analysis_results_json = json.loads(json_text)
         
-        if isinstance(analysis_results, list) and len(analysis_results) == len(texts):
-            return analysis_results
+        if isinstance(analysis_results_json, list) and len(analysis_results_json) == len(texts):
+            full_results = []
+            for i, result in enumerate(analysis_results_json):
+                result['embedding'] = embeddings[i]
+                full_results.append(result)
+            return full_results
         else:
-            print("エラー: LLMからの結果件数が一致しません。")
+            print(f"エラー: LLMからの結果件数が一致しません。(期待: {len(texts)}, 実際: {len(analysis_results_json)})")
             return [error_result] * len(texts)
 
     except (json.JSONDecodeError, Exception) as e:
         print(f"LLMでの分析中にエラーが発生しました: {e}")
+        print(f"--- LLMからの応答 ---\n{response.text}\n--------------------")
         return [error_result] * len(texts)

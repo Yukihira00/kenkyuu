@@ -6,13 +6,26 @@ from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from pydantic import BaseModel
+import numpy as np
 
-import database, quiz_checker, timeline_checker, personality_descriptions, llm_analyzer, type_descriptions
+# 自作モジュールのインポート
+import database
+import quiz_checker
+import timeline_checker
+import personality_descriptions
+import llm_analyzer
+import type_descriptions
 
+# --- アプリケーションの初期設定 ---
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key=secrets.token_hex(32))
 templates = Jinja2Templates(directory="templates")
 
+# --- コサイン類似度を計算する関数 ---
+def cosine_similarity(vec1, vec2):
+    return np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
+
+# --- タイプ分類ロジック ---
 def get_64_type(scores: dict) -> str:
     mbti_type = ""
     mbti_type += "E" if scores.get('X', 0) >= 3.0 else "I"
@@ -23,6 +36,7 @@ def get_64_type(scores: dict) -> str:
     light_dark = "L" if scores.get('H', 0) >= 3.0 else "D"
     return f"{mbti_type}-{turbulence_assertiveness}{light_dark}"
 
+# --- ルート設定 ---
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     return RedirectResponse(url="/login") if 'user_did' not in request.session else RedirectResponse(url="/timeline")
@@ -39,8 +53,10 @@ async def login_process(request: Request, handle: str = Form(...), app_password:
         request.session['handle'] = user_profile['handle']
         request.session['display_name'] = user_profile['display_name']
         request.session['app_password'] = app_password
+        
         has_result = database.get_user_result(user_profile['did'])
         return RedirectResponse(url="/timeline", status_code=303) if has_result else RedirectResponse(url="/quiz", status_code=303)
+    
     return templates.TemplateResponse("login.html", {"request": request, "error": "ハンドルまたはアプリパスワードが間違っています。"})
 
 @app.get("/quiz", response_class=HTMLResponse)
@@ -53,10 +69,12 @@ async def submit_quiz(request: Request):
     if 'user_did' not in request.session: return RedirectResponse(url="/login")
     form_data = await request.form()
     answers = [int(form_data[f'q{i}']) for i in range(1, len(quiz_checker.QUESTIONS_DATA) + 1) if f'q{i}' in form_data]
+    
     if len(answers) == len(quiz_checker.QUESTIONS_DATA):
         scores = quiz_checker.calculate_scores(answers)
         database.add_or_update_hexaco_result(request.session['user_did'], request.session['handle'], scores)
         return RedirectResponse(url="/results", status_code=303)
+    
     return templates.TemplateResponse("quiz.html", {"request": request, "questions": quiz_checker.QUESTIONS_DATA, "error": "すべての質問に回答してください。"})
 
 @app.get("/timeline", response_class=HTMLResponse)
@@ -66,10 +84,12 @@ async def show_timeline(request: Request):
     user_did = request.session['user_did']
     user_filter_settings = database.get_user_filter_settings(user_did)
     user_scores = database.get_user_result(user_did)
-    hidden_content = set(user_filter_settings.get('hidden_content_categories', []))
-    
-    # ▼▼▼【変更】不快報告した投稿のURIリストを取得 ▼▼▼
+    hidden_content_manual = set(user_filter_settings.get('hidden_content_categories', []))
     unpleasant_uris = set(database.get_unpleasant_feedback_uris(user_did))
+    learned_unpleasant_categories = database.get_learned_unpleasant_categories(user_did)
+    
+    unpleasant_vectors = database.get_unpleasant_post_vectors(user_did)
+    SIMILARITY_THRESHOLD = 0.75
 
     raw_feed = timeline_checker.get_timeline_data(request.session['handle'], request.session['app_password'], limit=50)
     if not raw_feed:
@@ -99,23 +119,44 @@ async def show_timeline(request: Request):
         analysis_result = cached_results.get(item.post.uri)
         item.is_mosaic = False
         
-        # ▼▼▼【変更】モザイク表示の条件に「不快報告」を追加 ▼▼▼
         if item.post.uri in unpleasant_uris:
             item.is_mosaic = True
             item.analysis_info = {"type": "不快な投稿", "category": "あなたが報告した投稿"}
         elif analysis_result:
-            if analysis_result.get("content_category") in hidden_content:
-                item.is_mosaic = True
-                item.analysis_info = {"type": "コンテンツ", "category": analysis_result.get("content_category")}
-            elif user_filter_settings.get('auto_filter_enabled') and user_scores:
-                for trait, rules in personality_descriptions.FILTERING_RULES.items():
-                    level = 'high' if user_scores[trait.lower()] >= 3.0 else 'low'
-                    rule = rules[level]
-                    post_category = analysis_result.get(f"{rule['type']}_category")
-                    if post_category in rule['categories']:
-                        item.is_mosaic = True
-                        item.analysis_info = {"type": "性格診断", "category": post_category}
+            post_embedding = analysis_result.get("embedding")
+            is_similar = False
+            if post_embedding is not None and unpleasant_vectors:
+                for unpleasant_vec in unpleasant_vectors:
+                    similarity = cosine_similarity(post_embedding, unpleasant_vec)
+                    if similarity > SIMILARITY_THRESHOLD:
+                        is_similar = True
                         break
+            
+            if is_similar:
+                item.is_mosaic = True
+                item.analysis_info = {"type": "類似フィルター", "category": "あなたが不快と報告した投稿に類似"}
+            else:
+                post_categories = {
+                    analysis_result.get("content_category"),
+                    analysis_result.get("expression_category"),
+                    analysis_result.get("style_stance_category")
+                }
+                matched_category = next((cat for cat in post_categories if cat in learned_unpleasant_categories), None)
+                if matched_category:
+                    item.is_mosaic = True
+                    item.analysis_info = {"type": "学習フィルター", "category": f"「{matched_category}」の投稿"}
+                elif analysis_result.get("content_category") in hidden_content_manual:
+                    item.is_mosaic = True
+                    item.analysis_info = {"type": "手動フィルター", "category": analysis_result.get("content_category")}
+                elif user_filter_settings.get('auto_filter_enabled') and user_scores:
+                    for trait, rules in personality_descriptions.FILTERING_RULES.items():
+                        level = 'high' if user_scores[trait.lower()] >= 3.0 else 'low'
+                        rule = rules[level]
+                        post_category = analysis_result.get(f"{rule['type']}_category")
+                        if post_category in rule['categories']:
+                            item.is_mosaic = True
+                            item.analysis_info = {"type": "性格診断フィルター", "category": post_category}
+                            break
         
         if item.is_mosaic: hidden_post_count += 1
         processed_feed.append(item)
@@ -161,8 +202,23 @@ async def save_settings(request: Request):
     hidden_content = form_data.getlist("hidden_content")
     auto_filter_enabled = form_data.get("auto_filter_switch") == "on"
     database.save_user_filter_settings(request.session['user_did'], hidden_content, auto_filter_enabled)
+    
+    # データを再取得してテンプレートに渡す
+    user_settings = database.get_user_filter_settings(request.session['user_did'])
+    user_scores = database.get_user_result(request.session['user_did'])
+    active_rules = {}
+    if user_scores:
+        for trait, rules in personality_descriptions.FILTERING_RULES.items():
+            level = 'high' if user_scores[trait.lower()] >= 3.0 else 'low'
+            active_rules[rules['name']] = rules[level]['categories']
             
-    return RedirectResponse(url="/settings", status_code=303)
+    return templates.TemplateResponse("settings.html", {
+        "request": request,
+        "user_settings": user_settings,
+        "all_content_categories": llm_analyzer.CONTENT_CATEGORIES,
+        "active_rules": active_rules,
+        "save_success": True
+    })
 
 class ReportPayload(BaseModel):
     uri: str
@@ -174,7 +230,9 @@ async def report_unpleasant(request: Request, payload: ReportPayload):
     
     user_did = request.session['user_did']
     post_uri = payload.uri
+    
     database.add_unpleasant_feedback(user_did, post_uri)
+    
     return JSONResponse(content={"success": True})
 
 if __name__ == "__main__":
