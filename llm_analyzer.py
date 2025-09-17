@@ -65,17 +65,23 @@ flat_style_stance_categories = [item for sublist in STYLE_STANCE_CATEGORIES.valu
 
 # -----------------------------------------------------------------
 
-def analyze_post_text(text: str):
+def analyze_posts_batch(texts: list[str]):
     """
-    投稿テキストをGemini APIに送信し、3つの軸でカテゴリを分析して返す。
+    複数の投稿テキストをGemini APIに送信し、3つの軸でカテゴリを分析して返す。
     """
     if not API_KEY:
         print("エラー: GEMINI_API_KEYが設定されていません。")
         return None
 
+    # 各投稿を連番と区切り線で整形
+    formatted_texts = []
+    for i, text in enumerate(texts):
+        formatted_texts.append(f"投稿{i+1}:\n---\n{text}\n---")
+    
     # LLMへの指示（プロンプト）を作成
     prompt = f"""
-    以下のSNS投稿を分析し、3つの軸それぞれについて最も適切なカテゴリを1つだけ選択し、JSON形式で回答してください。
+    以下のSNS投稿リスト（{len(texts)}件）を分析し、それぞれの投稿について3つの軸で最も適切なカテゴリを1つずつ選択してください。
+    回答は、JSONオブジェクトのリスト形式で、投稿の順番通りに出力してください。
 
     # 分析の軸:
     1. content_category: 投稿の主要な内容・トピック
@@ -86,17 +92,26 @@ def analyze_post_text(text: str):
     - 「content_category」は必ず以下のリストから選択してください: {flat_content_categories}
     - 「expression_category」は必ず以下のリストから選択してください: {flat_expression_categories}
     - 「style_stance_category」は必ず以下のリストから選択してください: {flat_style_stance_categories}
-    - 回答はJSONオブジェクトのみとし、説明文などは一切含めないでください。
+    - 回答はJSONオブジェクトのリストのみとし、説明文などは一切含めないでください。
+    - 各JSONオブジェクトには "content_category", "expression_category", "style_stance_category" の3つのキーを必ず含めてください。
 
-    # 投稿テキスト:
-    "{text}"
+    # 投稿リスト:
+    {"\n".join(formatted_texts)}
 
-    # 出力形式:
-    {{
-      "content_category": "（選択したコンテンツカテゴリ）",
-      "expression_category": "（選択した表現カテゴリ）",
-      "style_stance_category": "（選択した文体・スタンスカテゴリ）"
-    }}
+    # 出力形式 (JSONリスト):
+    [
+      {{
+        "content_category": "（投稿1のコンテンツカテゴリ）",
+        "expression_category": "（投稿1の表現カテゴリ）",
+        "style_stance_category": "（投稿1の文体・スタンスカテゴリ）"
+      }},
+      {{
+        "content_category": "（投稿2のコンテンツカテゴリ）",
+        "expression_category": "（投稿2の表現カテゴリ）",
+        "style_stance_category": "（投稿2の文体・スタンスカテゴリ）"
+      }},
+      ...
+    ]
     """
 
     try:
@@ -108,18 +123,19 @@ def analyze_post_text(text: str):
         if json_text.startswith("```json"):
             json_text = json_text[7:-3].strip()
         
-        analysis_result = json.loads(json_text)
+        analysis_results = json.loads(json_text)
         
-        # 想定したキーが存在するかチェック
-        if "content_category" in analysis_result and "expression_category" in analysis_result and "style_stance_category" in analysis_result:
-            return analysis_result
+        # 結果がリスト形式であり、件数が元の投稿数と一致するか確認
+        if isinstance(analysis_results, list) and len(analysis_results) == len(texts):
+            return analysis_results
         else:
-            print(f"エラー: LLMからのレスポンス形式が不正です。Response: {response.text}")
-            return None
+            print(f"エラー: LLMからのレスポンス形式が不正、または結果の件数が一致しません。")
+            return [None] * len(texts) # 元の投稿数に合わせてNoneのリストを返す
 
     except Exception as e:
         print(f"LLMでの分析中にエラーが発生しました: {e}")
-        return None
+        return [None] * len(texts) # エラー時もNoneのリストを返す
+
 
 # (テスト用のコードは変更なし)
 if __name__ == '__main__':
@@ -133,8 +149,13 @@ if __name__ == '__main__':
         "この週末、3年ぶりに開催される地元のお祭りにボランティアとして参加します！楽しみ！"
     ]
     
-    for i, post in enumerate(sample_posts, 1):
-        print(f"\n投稿{i}: '{post}'")
-        result = analyze_post_text(post)
-        if result:
-            print(f"  -> 分析結果: {result}")
+    print(f"\n{len(sample_posts)}件の投稿をまとめて分析します。")
+    results = analyze_posts_batch(sample_posts)
+    
+    if results:
+        for i, (post, result) in enumerate(zip(sample_posts, results)):
+            print(f"\n投稿{i+1}: '{post}'")
+            if result:
+                print(f"  -> 分析結果: {result}")
+            else:
+                print("  -> 分析に失敗しました。")

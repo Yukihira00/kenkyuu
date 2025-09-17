@@ -1,3 +1,4 @@
+# database.py
 import os
 import psycopg2
 import psycopg2.extras
@@ -28,7 +29,7 @@ def initialize_database():
     conn = get_connection()
     cursor = conn.cursor()
 
-    # (users, hexaco_results テーブルの作成は変更なし)
+    # (users, hexaco_results, filter_settings テーブルの作成は変更なし)
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS users (
         user_did TEXT PRIMARY KEY,
@@ -48,7 +49,6 @@ def initialize_database():
     )
     ''')
     
-    # ★★★ filter_settings テーブルの構造を変更 ★★★
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS filter_settings (
         setting_id SERIAL PRIMARY KEY,
@@ -60,6 +60,18 @@ def initialize_database():
         FOREIGN KEY (user_did) REFERENCES users (user_did)
     )
     ''')
+
+    # ★★★ 分析結果をキャッシュするテーブルを追加 ★★★
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS post_analysis_cache (
+        post_uri TEXT PRIMARY KEY,
+        content_category TEXT NOT NULL,
+        expression_category TEXT NOT NULL,
+        style_stance_category TEXT NOT NULL,
+        analyzed_at TIMESTAMPTZ NOT NULL
+    )
+    ''')
+
 
     conn.commit()
     cursor.close()
@@ -117,7 +129,6 @@ def get_user_filter_settings(user_did: str):
     conn = get_connection()
     cursor = conn.cursor()
     
-    # ★★★ 取得するカラム名を変更 ★★★
     cursor.execute("SELECT hidden_content_categories, hidden_expression_categories, hidden_style_stance_categories FROM filter_settings WHERE user_did = %s", (user_did,))
     settings = cursor.fetchone()
     
@@ -127,7 +138,6 @@ def get_user_filter_settings(user_did: str):
     if settings:
         return settings
     else:
-        # ★★★ デフォルトの戻り値のキーを変更 ★★★
         return {
             'hidden_content_categories': [],
             'hidden_expression_categories': [],
@@ -140,7 +150,6 @@ def save_user_filter_settings(user_did: str, content: list[str], expression: lis
     cursor = conn.cursor()
     now = datetime.now()
     
-    # ★★★ 保存するクエリと変数を変更 ★★★
     cursor.execute('''
         INSERT INTO filter_settings (user_did, hidden_content_categories, hidden_expression_categories, hidden_style_stance_categories, updated_at)
         VALUES (%s, %s, %s, %s, %s)
@@ -156,18 +165,54 @@ def save_user_filter_settings(user_did: str, content: list[str], expression: lis
     conn.close()
     print(f"✅ ユーザー (did: ...{user_did[-6:]}) のフィルター設定を保存しました。")
 
+# ★★★ ここから下に関数を追加・変更 ★★★
+
+def get_cached_analysis_results(post_uris: list[str]) -> dict[str, dict]:
+    """指定された投稿URIのリストについて、キャッシュ済みの分析結果を辞書で返す"""
+    if not post_uris:
+        return {}
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # プレースホルダをURIの数に合わせて生成
+    placeholders = ','.join(['%s'] * len(post_uris))
+    query = f"SELECT post_uri, content_category, expression_category, style_stance_category FROM post_analysis_cache WHERE post_uri IN ({placeholders})"
+    
+    cursor.execute(query, tuple(post_uris))
+    cached_results = cursor.fetchall()
+    
+    cursor.close()
+    conn.close()
+    
+    # {post_uri: {analysis_data}} の形式の辞書に変換して返す
+    return {result['post_uri']: result for result in cached_results}
+
+def save_analysis_results(post_uri: str, analysis_result: dict):
+    """単一の分析結果をキャッシュテーブルに保存する"""
+    if not analysis_result:
+        return
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    now = datetime.now()
+
+    cursor.execute('''
+        INSERT INTO post_analysis_cache (post_uri, content_category, expression_category, style_stance_category, analyzed_at)
+        VALUES (%s, %s, %s, %s, %s)
+        ON CONFLICT (post_uri) DO NOTHING
+    ''', (
+        post_uri,
+        analysis_result.get('content_category', 'N/A'),
+        analysis_result.get('expression_category', 'N/A'),
+        analysis_result.get('style_stance_category', 'N/A'),
+        now
+    ))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
 if __name__ == '__main__':
+    # データベースの初期化（キャッシュテーブルも作成される）
     initialize_database()
-    print("\n--- データ保存テスト ---")
-    dummy_scores = {'H': 3.0, 'E': 1.0, 'X': 2.2, 'A': 3.8, 'C': 1.8, 'O': 3.0}
-    dummy_did = 'did:plc:xxxxxxxxxxxxxxxxx'
-    dummy_handle = 'testuser.bsky.social'
-    add_or_update_hexaco_result(dummy_did, dummy_handle, dummy_scores)
-    print("\n--- データ取得テスト ---")
-    saved_result = get_user_result(dummy_did)
-    if saved_result:
-        print("取得したスコア:")
-        print(f"  H: {saved_result['h']}, E: {saved_result['e']}, X: {saved_result['x']}")
-        print(f"  A: {saved_result['a']}, C: {saved_result['c']}, O: {saved_result['o']}")
-    print("\n--- 存在しないユーザーのテスト ---")
-    get_user_result('did:plc:not-exist-user')
