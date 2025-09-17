@@ -8,7 +8,6 @@
     body { font-family: 'Noto Sans JP', sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; color: #1c1e21; }
     .container { max-width: 680px; margin: 0 auto; }
     
-    /* ▼▼▼ ハンバーガーメニュー用のスタイル ▼▼▼ */
     .header { background: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; }
     .header-top { display: flex; justify-content: space-between; align-items: center; }
     .header h1 { margin: 0; font-size: 1.2em; }
@@ -22,7 +21,7 @@
         flex-direction: column;
         justify-content: space-around;
         width: 30px;
-        height: 25px; /* ボタン全体の高さを少し調整 */
+        height: 25px;
         background: transparent;
         border: none;
         cursor: pointer;
@@ -41,7 +40,7 @@
     .nav-links {
         list-style: none;
         position: absolute;
-        top: 40px; /* ボタンからの距離 */
+        top: 40px;
         right: 0;
         background: white;
         border-radius: 8px;
@@ -49,7 +48,7 @@
         margin: 0;
         padding: 10px 0;
         width: 200px;
-        transform: translateY(-10px); /* 登場時のアニメーション */
+        transform: translateY(-10px);
         opacity: 0;
         visibility: hidden;
         transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s;
@@ -78,9 +77,7 @@
     .nav-links .logout a:hover {
         background-color: #fbeae8;
     }
-    /* ▲▲▲ ここまで ▲▲▲ */
 
-    /* (その他のスタイルは変更なし) */
     .filter-status {
         margin-top: 15px;
         padding-top: 15px;
@@ -90,7 +87,6 @@
         text-align: center;
     }
 
-    /* --- 投稿表示 --- */
     .post { background: white; padding: 15px 20px; border-radius: 8px; }
     .post-header { display: flex; align-items: center; margin-bottom: 12px; }
     .post-avatar { width: 40px; height: 40px; border-radius: 50%; margin-right: 12px; }
@@ -103,7 +99,6 @@
     .post-images img:hover { opacity: 0.8; }
     .post-footer { font-size: 0.8em; color: #65676b; margin-top: 15px; text-align: right; }
 
-    /* --- モザイク表示 --- */
     .post-mosaic-container { position: relative; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 15px; overflow: hidden; }
     .post-content-hidden { filter: blur(8px) grayscale(50%); transition: filter 0.3s ease-in-out; }
     .post-content-hidden.revealed { filter: none; }
@@ -151,7 +146,7 @@
                         {% if item.analysis_info %}
                             <div class="analysis-info">
                                 <strong>非表示理由:</strong><br>
-                                {{ item.analysis_info.content_category }}, {{ item.analysis_info.expression_category }}, {{ item.analysis_info.style_stance_category }}
+                                {{ item.analysis_info.content_category }}
                             </div>
                         {% endif %}
                     </div>
@@ -213,7 +208,6 @@
         document.querySelectorAll('.reveal-button').forEach(button => {
             button.addEventListener('click', function() {
                 const overlay = this.closest('.reveal-overlay');
-                // モザイクコンテナ内の post-content-hidden クラスを持つ要素を探す
                 const postContent = overlay.closest('.post-mosaic-container').querySelector('.post-content-hidden');
                 
                 if (overlay && postContent) {

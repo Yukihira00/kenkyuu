@@ -29,7 +29,7 @@ def initialize_database():
     conn = get_connection()
     cursor = conn.cursor()
 
-    # (users, hexaco_results, filter_settings テーブルの作成は変更なし)
+    # (users, hexaco_results テーブルの作成は変更なし)
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS users (
         user_did TEXT PRIMARY KEY,
@@ -49,13 +49,12 @@ def initialize_database():
     )
     ''')
     
+    # ★★★ filter_settings テーブルの定義を修正 ★★★
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS filter_settings (
         setting_id SERIAL PRIMARY KEY,
         user_did TEXT NOT NULL UNIQUE,
         hidden_content_categories TEXT[] NOT NULL,
-        hidden_expression_categories TEXT[] NOT NULL,
-        hidden_style_stance_categories TEXT[] NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL,
         FOREIGN KEY (user_did) REFERENCES users (user_did)
     )
@@ -129,7 +128,8 @@ def get_user_filter_settings(user_did: str):
     conn = get_connection()
     cursor = conn.cursor()
     
-    cursor.execute("SELECT hidden_content_categories, hidden_expression_categories, hidden_style_stance_categories FROM filter_settings WHERE user_did = %s", (user_did,))
+    # ★★★ 取得するカラムを修正 ★★★
+    cursor.execute("SELECT hidden_content_categories FROM filter_settings WHERE user_did = %s", (user_did,))
     settings = cursor.fetchone()
     
     cursor.close()
@@ -138,34 +138,30 @@ def get_user_filter_settings(user_did: str):
     if settings:
         return settings
     else:
+        # ★★★ 返す辞書のキーを修正 ★★★
         return {
-            'hidden_content_categories': [],
-            'hidden_expression_categories': [],
-            'hidden_style_stance_categories': []
+            'hidden_content_categories': []
         }
 
-def save_user_filter_settings(user_did: str, content: list[str], expression: list[str], style: list[str]):
+def save_user_filter_settings(user_did: str, content: list[str]):
     """ユーザーのフィルター設定を保存または更新する"""
     conn = get_connection()
     cursor = conn.cursor()
     now = datetime.now()
     
+    # ★★★ 保存するクエリとパラメータを修正 ★★★
     cursor.execute('''
-        INSERT INTO filter_settings (user_did, hidden_content_categories, hidden_expression_categories, hidden_style_stance_categories, updated_at)
-        VALUES (%s, %s, %s, %s, %s)
+        INSERT INTO filter_settings (user_did, hidden_content_categories, updated_at)
+        VALUES (%s, %s, %s)
         ON CONFLICT (user_did) DO UPDATE SET
             hidden_content_categories = EXCLUDED.hidden_content_categories,
-            hidden_expression_categories = EXCLUDED.hidden_expression_categories,
-            hidden_style_stance_categories = EXCLUDED.hidden_style_stance_categories,
             updated_at = EXCLUDED.updated_at
-    ''', (user_did, content, expression, style, now))
+    ''', (user_did, content, now))
     
     conn.commit()
     cursor.close()
     conn.close()
     print(f"✅ ユーザー (did: ...{user_did[-6:]}) のフィルター設定を保存しました。")
-
-# ★★★ ここから下に関数を追加・変更 ★★★
 
 def get_cached_analysis_results(post_uris: list[str]) -> dict[str, dict]:
     """指定された投稿URIのリストについて、キャッシュ済みの分析結果を辞書で返す"""
@@ -175,7 +171,6 @@ def get_cached_analysis_results(post_uris: list[str]) -> dict[str, dict]:
     conn = get_connection()
     cursor = conn.cursor()
     
-    # プレースホルダをURIの数に合わせて生成
     placeholders = ','.join(['%s'] * len(post_uris))
     query = f"SELECT post_uri, content_category, expression_category, style_stance_category FROM post_analysis_cache WHERE post_uri IN ({placeholders})"
     
@@ -185,7 +180,6 @@ def get_cached_analysis_results(post_uris: list[str]) -> dict[str, dict]:
     cursor.close()
     conn.close()
     
-    # {post_uri: {analysis_data}} の形式の辞書に変換して返す
     return {result['post_uri']: result for result in cached_results}
 
 def save_analysis_results(post_uri: str, analysis_result: dict):
@@ -204,6 +198,7 @@ def save_analysis_results(post_uri: str, analysis_result: dict):
     ''', (
         post_uri,
         analysis_result.get('content_category', 'N/A'),
+        # ★★★ 以下の2行は後々llm_analyzer側の修正で不要になるが、キャッシュテーブルの構造は維持するため残す ★★★
         analysis_result.get('expression_category', 'N/A'),
         analysis_result.get('style_stance_category', 'N/A'),
         now
@@ -214,5 +209,4 @@ def save_analysis_results(post_uri: str, analysis_result: dict):
     conn.close()
 
 if __name__ == '__main__':
-    # データベースの初期化（キャッシュテーブルも作成される）
     initialize_database()

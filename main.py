@@ -12,7 +12,7 @@ import quiz_checker
 import timeline_checker
 import personality_descriptions
 import llm_analyzer
-import type_descriptions # ★ この行が追加されています
+import type_descriptions
 
 # --- アプリケーションの初期設定 ---
 app = FastAPI()
@@ -117,12 +117,18 @@ async def show_timeline(request: Request):
     user_info = {"did": user_did, "handle": handle, "display_name": request.session.get('user_display_name') or handle}
     user_filter_settings = database.get_user_filter_settings(user_did)
     hidden_content = set(user_filter_settings.get('hidden_content_categories', []))
-    hidden_expression = set(user_filter_settings.get('hidden_expression_categories', []))
-    hidden_style = set(user_filter_settings.get('hidden_style_stance_categories', []))
 
     raw_feed = timeline_checker.get_timeline_data(handle, app_password, limit=50) 
     if not raw_feed:
-        return templates.TemplateResponse("timeline.html", {"request": request, "user": user_info, "feed": [], "hidden_post_count": 0, "total_post_count": 0})
+        # ★★★ エラー回避のため、カテゴリリストとユーザー設定を渡すように修正 ★★★
+        return templates.TemplateResponse("timeline.html", {
+            "request": request, 
+            "user": user_info, 
+            "feed": [], 
+            "hidden_post_count": 0, 
+            "total_post_count": 0,
+            "user_settings": user_filter_settings
+        })
 
     all_post_uris = [item.post.uri for item in raw_feed if item.post and item.post.uri]
     cached_results = database.get_cached_analysis_results(all_post_uris)
@@ -161,9 +167,7 @@ async def show_timeline(request: Request):
         item.is_mosaic = False
 
         if analysis_result:
-            if analysis_result.get("content_category") in hidden_content or \
-               analysis_result.get("expression_category") in hidden_expression or \
-               analysis_result.get("style_stance_category") in hidden_style:
+            if analysis_result.get("content_category") in hidden_content:
                 item.is_mosaic = True
         
         if item.is_mosaic:
@@ -171,12 +175,14 @@ async def show_timeline(request: Request):
             
         processed_feed.append(item)
 
+    # ★★★ エラー回避のため、カテゴリリストとユーザー設定を渡すように修正 ★★★
     return templates.TemplateResponse("timeline.html", {
         "request": request,
         "user": user_info,
         "feed": processed_feed,
         "hidden_post_count": hidden_post_count,
-        "total_post_count": len(raw_feed)
+        "total_post_count": len(raw_feed),
+        "user_settings": user_filter_settings
     })
 
 
@@ -196,10 +202,8 @@ async def show_results(request: Request):
         return RedirectResponse(url="/quiz", status_code=302)
     scores = {'H': result.get('h', 0), 'E': result.get('e', 0), 'X': result.get('x', 0), 'A': result.get('a', 0), 'C': result.get('c', 0), 'O': result.get('o', 0)}
     
-    # 64タイプ分類のコードを計算
     personality_type_64_code = get_64_type(scores)
     
-    # ★ コードに対応する情報を type_descriptions から取得
     type_info = type_descriptions.TYPE_DESCRIPTIONS.get(personality_type_64_code, {
         "title": "測定不能",
         "type_name": "不明",
@@ -210,7 +214,7 @@ async def show_results(request: Request):
         "request": request, 
         "scores": scores, 
         "descriptions": personality_descriptions.DESCRIPTIONS,
-        "type_info": type_info  # ★ テンプレートに渡す変数を変更
+        "type_info": type_info
     })
 
 @app.get("/settings", response_class=HTMLResponse)
@@ -223,8 +227,6 @@ async def show_settings(request: Request):
         "request": request,
         "user_settings": user_settings,
         "all_content_categories": llm_analyzer.CONTENT_CATEGORIES,
-        "all_expression_categories": llm_analyzer.EXPRESSION_CATEGORIES,
-        "all_style_stance_categories": llm_analyzer.STYLE_STANCE_CATEGORIES,
     })
 
 @app.post("/settings")
@@ -236,18 +238,14 @@ async def save_settings(request: Request):
     form_data = await request.form()
     
     hidden_content = form_data.getlist("hidden_content")
-    hidden_expression = form_data.getlist("hidden_expression")
-    hidden_style_stance = form_data.getlist("hidden_style_stance")
     
-    database.save_user_filter_settings(user_did, hidden_content, hidden_expression, hidden_style_stance)
+    database.save_user_filter_settings(user_did, hidden_content)
     
     user_settings = database.get_user_filter_settings(user_did)
     return templates.TemplateResponse("settings.html", {
         "request": request,
         "user_settings": user_settings,
         "all_content_categories": llm_analyzer.CONTENT_CATEGORIES,
-        "all_expression_categories": llm_analyzer.EXPRESSION_CATEGORIES,
-        "all_style_stance_categories": llm_analyzer.STYLE_STANCE_CATEGORIES,
         "save_success": True
     })
 

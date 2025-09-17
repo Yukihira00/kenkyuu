@@ -15,15 +15,14 @@
         .category-group h3 { font-size: 1.2em; color: #333; margin-bottom: 1rem; padding-left: 0.5rem; border-left: 4px solid #007bff; }
         .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.8rem; padding-left: 1rem; }
         
-        /* ★★★ labelタグがクリック範囲になるようにスタイルを調整 ★★★ */
         .checkbox-label {
             display: flex;
             align-items: center;
-            cursor: pointer; /* カーソルをポインターに */
+            cursor: pointer;
             padding: 2px;
         }
         .checkbox-label input {
-            margin-right: 0.7rem; /* 文字とチェックボックスの間隔を調整 */
+            margin-right: 0.7rem;
         }
 
         .button-container { text-align: center; margin-top: 2rem; }
@@ -40,7 +39,6 @@
             padding: 0.8rem;
             border-radius: 5px;
             border: 1px solid #a7d7c5;
-            /* 最初は非表示にしておく */
             display: none; 
         }
     </style>
@@ -53,7 +51,7 @@
         <form class="settings-form" id="settings-form" action="/settings" method="post">
             
             <div class="axis-group">
-                <h2>【軸1】コンテンツカテゴリ</h2>
+                <h2>コンテンツカテゴリ</h2>
                 {% for group_name, items in all_content_categories.items() %}
                 <div class="category-group">
                     <h3>{{ group_name }}</h3>
@@ -62,42 +60,6 @@
                         <label class="checkbox-label">
                             <input type="checkbox" name="hidden_content" value="{{ item }}"
                                    {% if item in user_settings.hidden_content_categories %}checked{% endif %}>
-                            {{ item }}
-                        </label>
-                        {% endfor %}
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-
-            <div class="axis-group">
-                <h2>【軸2】表現カテゴリ</h2>
-                {% for group_name, items in all_expression_categories.items() %}
-                <div class="category-group">
-                    <h3>{{ group_name }}</h3>
-                    <div class="checkbox-grid">
-                        {% for item in items %}
-                        <label class="checkbox-label">
-                            <input type="checkbox" name="hidden_expression" value="{{ item }}"
-                                   {% if item in user_settings.hidden_expression_categories %}checked{% endif %}>
-                            {{ item }}
-                        </label>
-                        {% endfor %}
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-
-            <div class="axis-group">
-                <h2>【軸3】文体・スタンスカテゴリ</h2>
-                {% for group_name, items in all_style_stance_categories.items() %}
-                <div class="category-group">
-                    <h3>{{ group_name }}</h3>
-                    <div class="checkbox-grid">
-                        {% for item in items %}
-                        <label class="checkbox-label">
-                            <input type="checkbox" name="hidden_style_stance" value="{{ item }}"
-                                   {% if item in user_settings.hidden_style_stance_categories %}checked{% endif %}>
                             {{ item }}
                         </label>
                         {% endfor %}
@@ -120,14 +82,12 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', (event) => {
-            // 1. スクロール位置を復元する処理
             const scrollpos = localStorage.getItem('scrollpos');
             if (scrollpos) {
                 window.scrollTo(0, parseInt(scrollpos, 10));
                 localStorage.removeItem('scrollpos');
             }
 
-            // 2. フォーム送信時にスクロール位置を保存する処理
             const form = document.getElementById('settings-form');
             if (form) {
                 form.addEventListener('submit', () => {
@@ -135,13 +95,10 @@
                 });
             }
 
-            // 3. 保存成功メッセージがあれば表示する処理
-            // (Pythonから `save_success` フラグが渡された場合のみ実行)
             {% if save_success %}
                 const successMsg = document.getElementById('success-msg');
                 if (successMsg) {
                     successMsg.style.display = 'block';
-                    // 3秒後にメッセージを消す
                     setTimeout(() => {
                         successMsg.style.display = 'none';
                     }, 3000);

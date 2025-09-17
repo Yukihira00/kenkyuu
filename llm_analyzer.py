@@ -12,7 +12,7 @@ API_KEY = os.getenv('GEMINI_API_KEY')
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel('gemini-2.5-flash-lite')
 
-# --- 新しい3軸のカテゴリ定義 ---
+# --- 3軸のカテゴリ定義を修正 ---
 
 # 【軸1】コンテンツカテゴリ（内容・トピック別）
 CONTENT_CATEGORIES = {
@@ -30,44 +30,16 @@ CONTENT_CATEGORIES = {
     ]
 }
 
-# 【軸2】表現カテゴリ（トーン・感情・目的別）
-EXPRESSION_CATEGORIES = {
-    "ポジティブ": ["喜び", "感謝", "感動", "祝福", "愛情", "賞賛", "興奮", "期待", "安らぎ", "癒やし"],
-    "ネガティブ": ["怒り", "不満", "悲しみ", "落胆", "不安", "心配", "後悔", "嫉妬", "軽蔑", "疲労"],
-    "ニュートラル": ["驚き", "発見", "懐かしさ", "共感", "寂しさ", "静かな気持ち"],
-    "情報共有・記録": ["ノウハウ・TIPS共有", "レビュー・評価", "まとめ・リスト", "体験談・レポート", "進捗報告"],
-    "意見・思考": ["意見表明", "主張", "考察・分析", "批評・問題提起", "自己内省", "決意表明"],
-    "コミュニケーション": ["質問・相談", "回答・返信", "呼びかけ・問いかけ", "雑談・つぶやき"],
-    "宣伝・告知": ["イベント告知", "商品・作品の宣伝", "自己紹介・PR", "募集"]
-}
-
-
-# 【軸3】文体・スタンスカテゴリ（文章の書き方別）
-STYLE_STANCE_CATEGORIES = {
-    "対人スタンス (Interpersonal Stance)": [
-        "上から目線 / 教示的", "自慢 / 誇示的", "皮肉 / 嫌味", "攻撃的 / 批判的",
-        "挑発的 / 扇動的", "謙虚 / 丁寧", "共感的 / 寄り添い", "フレンドリー / 親近感"
-    ],
-    "自己表現スタイル (Self-Expression Style)": [
-        "自虐的", "客観的 / 分析的", "断定的 / 主張的", "控えめ / 曖昧",
-        "論理的 / 構造的", "感情的 / 情熱的"
-    ],
-    "文体の特徴 (Writing Characteristics)": [
-        "ポエム / 詩的", "ユーモラス / 面白おかしい", "簡潔 / 箇条書き",
-        "口語体 / 話し言葉", "ですます調 / 敬体", "だである調 / 常体"
-    ]
-}
+# ★★★ 不要なカテゴリ定義を削除 ★★★
 
 # プロンプト用にカテゴリのリストを平坦化
 flat_content_categories = [item for sublist in CONTENT_CATEGORIES.values() for item in sublist]
-flat_expression_categories = [item for sublist in EXPRESSION_CATEGORIES.values() for item in sublist]
-flat_style_stance_categories = [item for sublist in STYLE_STANCE_CATEGORIES.values() for item in sublist]
 
 # -----------------------------------------------------------------
 
 def analyze_posts_batch(texts: list[str]):
     """
-    複数の投稿テキストをGemini APIに送信し、3つの軸でカテゴリを分析して返す。
+    複数の投稿テキストをGemini APIに送信し、コンテンツカテゴリを分析して返す。
     """
     if not API_KEY:
         print("エラー: GEMINI_API_KEYが設定されていません。")
@@ -78,22 +50,18 @@ def analyze_posts_batch(texts: list[str]):
     for i, text in enumerate(texts):
         formatted_texts.append(f"投稿{i+1}:\n---\n{text}\n---")
     
-    # LLMへの指示（プロンプト）を作成
+    # ★★★ LLMへの指示（プロンプト）を修正 ★★★
     prompt = f"""
-    以下のSNS投稿リスト（{len(texts)}件）を分析し、それぞれの投稿について3つの軸で最も適切なカテゴリを1つずつ選択してください。
+    以下のSNS投稿リスト（{len(texts)}件）を分析し、それぞれの投稿について最も適切なコンテンツカテゴリを1つ選択してください。
     回答は、JSONオブジェクトのリスト形式で、投稿の順番通りに出力してください。
 
     # 分析の軸:
     1. content_category: 投稿の主要な内容・トピック
-    2. expression_category: 投稿に込められた感情、目的、スタイル
-    3. style_stance_category: 文章の書き方や他者へのスタンス
 
     # 制約:
     - 「content_category」は必ず以下のリストから選択してください: {flat_content_categories}
-    - 「expression_category」は必ず以下のリストから選択してください: {flat_expression_categories}
-    - 「style_stance_category」は必ず以下のリストから選択してください: {flat_style_stance_categories}
     - 回答はJSONオブジェクトのリストのみとし、説明文などは一切含めないでください。
-    - 各JSONオブジェクトには "content_category", "expression_category", "style_stance_category" の3つのキーを必ず含めてください。
+    - 各JSONオブジェクトには "content_category" のキーを必ず含めてください。
 
     # 投稿リスト:
     {"\n".join(formatted_texts)}
@@ -101,14 +69,10 @@ def analyze_posts_batch(texts: list[str]):
     # 出力形式 (JSONリスト):
     [
       {{
-        "content_category": "（投稿1のコンテンツカテゴリ）",
-        "expression_category": "（投稿1の表現カテゴリ）",
-        "style_stance_category": "（投稿1の文体・スタンスカテゴリ）"
+        "content_category": "（投稿1のコンテンツカテゴリ）"
       }},
       {{
-        "content_category": "（投稿2のコンテンツカテゴリ）",
-        "expression_category": "（投稿2の表現カテゴリ）",
-        "style_stance_category": "（投稿2の文体・スタンスカテゴリ）"
+        "content_category": "（投稿2のコンテンツカテゴリ）"
       }},
       ...
     ]
