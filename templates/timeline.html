@@ -31,7 +31,8 @@
     .filter-status .category-count { font-weight: bold; }
 
     .post { background: white; padding: 15px 20px; border-radius: 8px; }
-    .post-header { display: flex; align-items: center; margin-bottom: 12px; }
+    .post-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+    .author-section { display: flex; align-items: center; }
     .post-avatar { width: 40px; height: 40px; border-radius: 50%; margin-right: 12px; }
     .post-author-info { display: flex; flex-direction: column; }
     .post-author { font-weight: bold; font-size: 1em; }
@@ -42,7 +43,8 @@
     .post-images img:hover { opacity: 0.8; }
     .post-footer { font-size: 0.8em; color: #65676b; margin-top: 15px; text-align: right; }
 
-    .post-mosaic-container { position: relative; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 15px; overflow: hidden; }
+    /* ↓↓↓ ここの overflow: hidden; を削除しました ↓↓↓ */
+    .post-mosaic-container { position: relative; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 15px; }
     .post-content-hidden { filter: blur(8px) grayscale(50%); transition: filter 0.3s ease-in-out; }
     .post-content-hidden.revealed { filter: none; }
     .reveal-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: rgba(255, 255, 255, 0.6); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition: opacity 0.3s ease-in-out; z-index: 10; }
@@ -51,6 +53,27 @@
     .reveal-button:hover { background-color: #0056b3; }
     .analysis-info { color: #333; background-color: rgba(255,255,255,0.8); padding: 8px 12px; border-radius: 8px; font-size: 0.9em; text-align: center; max-width: 80%; border: 1px solid rgba(0,0,0,0.1); }
     .analysis-info-title { display: block; font-weight: bold; color: #0056b3; margin-bottom: 4px; }
+    
+    /* 分析結果表示用のスタイル */
+    .post-menu { position: relative; }
+    .post-menu-btn { background: none; border: none; font-size: 1.5em; cursor: pointer; color: #65676b; padding: 0 5px; }
+    .analysis-popup {
+        display: none; /* 初期状態では非表示 */
+        position: absolute;
+        top: 30px;
+        right: 0;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+        padding: 15px;
+        width: 250px;
+        z-index: 100;
+    }
+    .analysis-popup.show { display: block; }
+    .analysis-popup h4 { margin: 0 0 10px 0; font-size: 1em; color: #333; }
+    .analysis-popup p { margin: 0 0 5px 0; font-size: 0.9em; }
+    .analysis-popup strong { color: #0056b3; }
+
 </style>
 </head>
 <body>
@@ -107,10 +130,26 @@
 
                     <div class="post {% if item.is_mosaic %}post-content-hidden{% endif %}">
                         <div class="post-header">
-                            <img src="{{ item.post.author.avatar }}" alt="avatar" class="post-avatar">
-                            <div class="post-author-info">
-                                <strong class="post-author">{{ item.post.author.display_name }}</strong>
-                                <span class="post-handle">@{{ item.post.author.handle }}</span>
+                            <div class="author-section">
+                                <img src="{{ item.post.author.avatar }}" alt="avatar" class="post-avatar">
+                                <div class="post-author-info">
+                                    <strong class="post-author">{{ item.post.author.display_name }}</strong>
+                                    <span class="post-handle">@{{ item.post.author.handle }}</span>
+                                </div>
+                            </div>
+                            <div class="post-menu">
+                                <button class="post-menu-btn" data-uri="{{ item.post.uri }}">…</button>
+                                <div class="analysis-popup" id="popup-{{ item.post.uri }}">
+                                    {% set post_analysis = analysis_results.get(item.post.uri) %}
+                                    {% if post_analysis %}
+                                        <h4>AIによる投稿分析</h4>
+                                        <p><strong>コンテンツ:</strong> {{ post_analysis.content_category }}</p>
+                                        <p><strong>表現:</strong> {{ post_analysis.expression_category }}</p>
+                                        <p><strong>スタイル:</strong> {{ post_analysis.style_stance_category }}</p>
+                                    {% else %}
+                                        <p>分析情報がありません。</p>
+                                    {% endif %}
+                                </div>
                             </div>
                         </div>
                         <div class="post-content">{{ item.post.record.text }}</div>
@@ -138,34 +177,52 @@
     </div>
 
     <script>
-        // ハンバーガーメニュー用のスクリプト
         document.addEventListener('DOMContentLoaded', function() {
+            // ハンバーガーメニュー
             const menuBtn = document.getElementById('menu-btn');
             const navLinks = document.getElementById('nav-links');
+            menuBtn.addEventListener('click', () => navLinks.classList.toggle('open'));
 
-            menuBtn.addEventListener('click', function() {
-                menuBtn.classList.toggle('open');
-                navLinks.classList.toggle('open');
+            // モザイク解除
+            document.querySelectorAll('.reveal-button').forEach(button => {
+                button.addEventListener('click', function() {
+                    const overlay = this.closest('.reveal-overlay');
+                    const postContent = overlay.closest('.post-mosaic-container').querySelector('.post-content-hidden');
+                    if (overlay && postContent) {
+                        overlay.classList.add('hidden');
+                        postContent.classList.add('revealed');
+                    }
+                });
             });
 
-            document.addEventListener('click', function(event) {
-                const isClickInside = menuBtn.contains(event.target) || navLinks.contains(event.target);
-                if (!isClickInside && navLinks.classList.contains('open')) {
-                    menuBtn.classList.remove('open');
+            // 投稿分析ポップアップ
+            const postMenuBtns = document.querySelectorAll('.post-menu-btn');
+            postMenuBtns.forEach(btn => {
+                btn.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    const uri = btn.dataset.uri;
+                    const popup = document.getElementById(`popup-${uri}`);
+                    // 他のポップアップをすべて閉じる
+                    document.querySelectorAll('.analysis-popup.show').forEach(p => {
+                        if (p !== popup) p.classList.remove('show');
+                    });
+                    // クリックされたポップアップの表示を切り替える
+                    if (popup) popup.classList.toggle('show');
+                });
+            });
+
+            // ドキュメント全体をクリックしたときの処理
+            document.addEventListener('click', (event) => {
+                // ハンバーガーメニューを閉じる
+                const isClickInsideMenu = menuBtn.contains(event.target) || navLinks.contains(event.target);
+                if (!isClickInsideMenu && navLinks.classList.contains('open')) {
                     navLinks.classList.remove('open');
                 }
-            });
-        });
-
-        // モザイク解除用のスクリプト
-        document.querySelectorAll('.reveal-button').forEach(button => {
-            button.addEventListener('click', function() {
-                const overlay = this.closest('.reveal-overlay');
-                const postContent = overlay.closest('.post-mosaic-container').querySelector('.post-content-hidden');
-                
-                if (overlay && postContent) {
-                    overlay.classList.add('hidden');
-                    postContent.classList.add('revealed');
+                // 分析ポップアップを閉じる
+                const isClickInsidePopup = event.target.closest('.analysis-popup');
+                const isClickInsideMenuBtn = event.target.closest('.post-menu-btn');
+                if (!isClickInsidePopup && !isClickInsideMenuBtn) {
+                    document.querySelectorAll('.analysis-popup.show').forEach(p => p.classList.remove('show'));
                 }
             });
         });

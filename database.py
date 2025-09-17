@@ -48,13 +48,12 @@ def initialize_database():
     )
     ''')
     
-    # filter_settings テーブルの定義を修正
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS filter_settings (
         setting_id SERIAL PRIMARY KEY,
         user_did TEXT NOT NULL UNIQUE,
         hidden_content_categories TEXT[] NOT NULL,
-        auto_filter_enabled BOOLEAN NOT NULL DEFAULT TRUE, -- 自動フィルタリングの有効/無効
+        auto_filter_enabled BOOLEAN NOT NULL DEFAULT TRUE,
         updated_at TIMESTAMPTZ NOT NULL,
         FOREIGN KEY (user_did) REFERENCES users (user_did)
     )
@@ -115,10 +114,8 @@ def get_user_result(user_did: str):
     conn.close()
 
     if result:
-        print(f"🔍 ユーザー (did: ...{user_did[-6:]}) の診断結果が見つかりました。")
         return result
     else:
-        print(f"⚠️ ユーザー (did: ...{user_did[-6:]}) の診断結果はまだありません。")
         return None
 
 def get_user_filter_settings(user_did: str):
@@ -126,7 +123,6 @@ def get_user_filter_settings(user_did: str):
     conn = get_connection()
     cursor = conn.cursor()
     
-    # 取得するカラムを修正
     cursor.execute("SELECT hidden_content_categories, auto_filter_enabled FROM filter_settings WHERE user_did = %s", (user_did,))
     settings = cursor.fetchone()
     
@@ -136,10 +132,9 @@ def get_user_filter_settings(user_did: str):
     if settings:
         return settings
     else:
-        # 返す辞書のキーを修正
         return {
             'hidden_content_categories': [],
-            'auto_filter_enabled': True # デフォルト値
+            'auto_filter_enabled': True
         }
 
 def save_user_filter_settings(user_did: str, content: list[str], auto_filter: bool):
@@ -148,7 +143,6 @@ def save_user_filter_settings(user_did: str, content: list[str], auto_filter: bo
     cursor = conn.cursor()
     now = datetime.now()
     
-    # 保存するクエリとパラメータを修正
     cursor.execute('''
         INSERT INTO filter_settings (user_did, hidden_content_categories, auto_filter_enabled, updated_at)
         VALUES (%s, %s, %s, %s)
@@ -184,6 +178,7 @@ def get_cached_analysis_results(post_uris: list[str]) -> dict[str, dict]:
 
 def save_analysis_results(post_uri: str, analysis_result: dict):
     """単一の分析結果をキャッシュテーブルに保存する"""
+    # この関数は analysis_result が None でないことを前提とする
     if not analysis_result:
         return
 

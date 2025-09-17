@@ -125,7 +125,8 @@ async def show_timeline(request: Request):
         return templates.TemplateResponse("timeline.html", {
             "request": request, "user": user_info, "feed": [], 
             "hidden_post_count": 0, "total_post_count": 0,
-            "user_settings": user_filter_settings
+            "user_settings": user_filter_settings,
+            "analysis_results": {}
         })
 
     all_post_uris = [item.post.uri for item in raw_feed if item.post and item.post.uri]
@@ -134,9 +135,17 @@ async def show_timeline(request: Request):
     posts_to_analyze_map = {}
     for item in raw_feed:
         post_uri = item.post.uri
-        post_text = item.post.record.text.strip() if hasattr(item.post.record, 'text') and item.post.record.text else ""
-        if post_uri not in cached_results and post_text:
-            posts_to_analyze_map[post_uri] = post_text
+        if post_uri not in cached_results:
+            post_text = item.post.record.text.strip() if hasattr(item.post.record, 'text') and item.post.record.text else ""
+            if post_text:
+                posts_to_analyze_map[post_uri] = post_text
+            else:
+                # テキストがない投稿にはデフォルトの分析結果を設定
+                cached_results[post_uri] = {
+                    "content_category": "画像・メディア投稿",
+                    "expression_category": "分析対象外",
+                    "style_stance_category": "分析対象外"
+                }
 
     if posts_to_analyze_map:
         uris_to_analyze = list(posts_to_analyze_map.keys())
@@ -178,13 +187,13 @@ async def show_timeline(request: Request):
                     target_category_type = rule['type']
                     target_categories = rule['categories']
                     
-                    # 投稿の分析結果が、ルールのカテゴリタイプと一致するか確認
-                    post_category = analysis_result.get(f"{target_category_type}_category")
+                    post_category_key = f"{target_category_type}_category"
+                    post_category = analysis_result.get(post_category_key)
                     
                     if post_category in target_categories:
                         item.is_mosaic = True
                         item.analysis_info = {"type": "性格診断", "category": post_category}
-                        break # 一致したらループを抜ける
+                        break
         
         if item.is_mosaic:
             hidden_post_count += 1
@@ -195,7 +204,7 @@ async def show_timeline(request: Request):
         "request": request, "user": user_info, "feed": processed_feed,
         "hidden_post_count": hidden_post_count, "total_post_count": len(raw_feed),
         "user_settings": user_filter_settings,
-        "analysis_results": cached_results # 全投稿の分析結果を渡す
+        "analysis_results": cached_results
     })
 
 
@@ -262,7 +271,6 @@ async def save_settings(request: Request):
     
     database.save_user_filter_settings(user_did, hidden_content, auto_filter_enabled)
     
-    # 保存後に再度設定を読み込んで表示
     user_settings = database.get_user_filter_settings(user_did)
     user_scores = database.get_user_result(user_did)
     active_rules = {}

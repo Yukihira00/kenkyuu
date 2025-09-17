@@ -74,6 +74,13 @@ def analyze_posts_batch(texts: list[str]):
         print("エラー: GEMINI_API_KEYが設定されていません。")
         return None
 
+    # 分析失敗時に返すエラー用の辞書
+    error_result = {
+        "content_category": "分析失敗",
+        "expression_category": "分析失敗",
+        "style_stance_category": "分析失敗"
+    }
+
     formatted_texts = []
     for i, text in enumerate(texts):
         formatted_texts.append(f"投稿{i+1}:\n---\n{text}\n---")
@@ -123,22 +130,22 @@ def analyze_posts_batch(texts: list[str]):
                  return analysis_results
         
         print(f"エラー: LLMからのレスポンス形式が不正、または結果の件数や内容が一致しません。")
-        return [None] * len(texts)
+        return [error_result] * len(texts)
 
     except Exception as e:
         print(f"LLMでの分析中にエラーが発生しました: {e}")
-        return [None] * len(texts)
+        return [error_result] * len(texts)
 
 
 if __name__ == '__main__':
     print("--- LLM分析テスト ---")
     
     sample_posts = [
-        "【衝撃】この方法を使えば、あなたも1ヶ月で10kg痩せられる！", # 大げさな表現・釣りタイトル
-        "ついに憧れのタワマン最上階に引っ越しました！夜景が最高すぎる…", # 自慢話
-        "このサプリ、本当に効果あるの？って聞かれるけど、使ってみたらマジで人生変わるよ（個人の感想です）", # ステマ
-        "「情けは人のためならず」は情けをかけると巡り巡って自分に返ってくる、という意味。間違って覚えてる人多すぎ。", # 教訓めいた投稿
-        "私なんて何をやってもダメダメだ…", # 過度なへりくだり・自虐
+        "【衝撃】この方法を使えば、あなたも1ヶ月で10kg痩せられる！", 
+        "ついに憧れのタワマン最上階に引っ越しました！夜景が最高すぎる…",
+        "このサプリ、本当に効果あるの？って聞かれるけど、使ってみたらマジで人生変わるよ（個人の感想です）",
+        "「情けは人のためならず」は情けをかけると巡り巡って自分に返ってくる、という意味。間違って覚えてる人多すぎ。",
+        "私なんて何をやってもダメダメだ…",
     ]
     
     print(f"\n{len(sample_posts)}件の投稿をまとめて分析します。")
