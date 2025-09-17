@@ -86,7 +86,9 @@ async def show_timeline(request: Request):
     user_scores = database.get_user_result(user_did)
     hidden_content_manual = set(user_filter_settings.get('hidden_content_categories', []))
     unpleasant_uris = set(database.get_unpleasant_feedback_uris(user_did))
-    learned_unpleasant_categories = database.get_learned_unpleasant_categories(user_did)
+    
+    # ▼▼▼【削除】不要になった変数を削除 ▼▼▼
+    # learned_unpleasant_categories = ...
     
     unpleasant_vectors = database.get_unpleasant_post_vectors(user_did)
     SIMILARITY_THRESHOLD = 0.75
@@ -132,27 +134,26 @@ async def show_timeline(request: Request):
                         is_similar = True
                         break
             
-            if is_similar:
+            # ▼▼▼【修正】フィルタリングロジックを簡素化 ▼▼▼
+            if user_filter_settings.get('similarity_filter_enabled') and is_similar:
                 item.is_mosaic = True
                 item.analysis_info = {"type": "類似フィルター", "category": "あなたが不快と報告した投稿に類似"}
-            else:
-                post_categories = {
-                    analysis_result.get("content_category"),
-                    analysis_result.get("expression_category"),
-                    analysis_result.get("style_stance_category")
-                }
-                matched_category = next((cat for cat in post_categories if cat in learned_unpleasant_categories), None)
-                if matched_category:
-                    item.is_mosaic = True
-                    item.analysis_info = {"type": "学習フィルター", "category": f"「{matched_category}」の投稿"}
-                elif analysis_result.get("content_category") in hidden_content_manual:
-                    item.is_mosaic = True
-                    item.analysis_info = {"type": "手動フィルター", "category": analysis_result.get("content_category")}
-                elif user_filter_settings.get('auto_filter_enabled') and user_scores:
-                    for trait, rules in personality_descriptions.FILTERING_RULES.items():
-                        level = 'high' if user_scores[trait.lower()] >= 3.0 else 'low'
-                        rule = rules[level]
-                        post_category = analysis_result.get(f"{rule['type']}_category")
+            elif analysis_result.get("content_category") in hidden_content_manual:
+                item.is_mosaic = True
+                item.analysis_info = {"type": "手動フィルター", "category": analysis_result.get("content_category")}
+            elif user_filter_settings.get('auto_filter_enabled') and user_scores:
+                for trait, rules in personality_descriptions.FILTERING_RULES.items():
+                    level = 'high' if user_scores.get(trait.lower(), 0) >= 3.0 else 'low'
+                    rule = rules[level]
+                    
+                    category_key = ""
+                    if rule['type'] == 'style':
+                        category_key = 'style_stance_category'
+                    elif rule['type'] == 'expression':
+                        category_key = 'expression_category'
+
+                    if category_key:
+                        post_category = analysis_result.get(category_key)
                         if post_category in rule['categories']:
                             item.is_mosaic = True
                             item.analysis_info = {"type": "性格診断フィルター", "category": post_category}
@@ -201,7 +202,18 @@ async def save_settings(request: Request):
     form_data = await request.form()
     hidden_content = form_data.getlist("hidden_content")
     auto_filter_enabled = form_data.get("auto_filter_switch") == "on"
-    database.save_user_filter_settings(request.session['user_did'], hidden_content, auto_filter_enabled)
+    similarity_filter_enabled = form_data.get("similarity_filter_switch") == "on"
+    
+    # ▼▼▼【修正】不要な変数を削除 ▼▼▼
+    # learning_filter_enabled = ...
+
+    # ▼▼▼【修正】関数呼び出しを修正 ▼▼▼
+    database.save_user_filter_settings(
+        request.session['user_did'], 
+        hidden_content, 
+        auto_filter_enabled, 
+        similarity_filter_enabled
+    )
     
     # データを再取得してテンプレートに渡す
     user_settings = database.get_user_filter_settings(request.session['user_did'])
@@ -209,7 +221,7 @@ async def save_settings(request: Request):
     active_rules = {}
     if user_scores:
         for trait, rules in personality_descriptions.FILTERING_RULES.items():
-            level = 'high' if user_scores[trait.lower()] >= 3.0 else 'low'
+            level = 'high' if user_scores.get(trait.lower(), 0) >= 3.0 else 'low'
             active_rules[rules['name']] = rules[level]['categories']
             
     return templates.TemplateResponse("settings.html", {

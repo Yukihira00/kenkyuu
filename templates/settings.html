@@ -84,6 +84,20 @@
                 </div>
                 {% endif %}
             </div>
+
+            <div class="axis-group">
+                <h2>類似投稿の自動フィルタリング</h2>
+                <div class="switch-container">
+                    <span class="switch-label">不快報告した投稿と似ている投稿を自動で非表示にする</span>
+                    <label class="switch">
+                        <input type="checkbox" name="similarity_filter_switch" {% if user_settings.similarity_filter_enabled %}checked{% endif %}>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <p style="font-size: 0.9em; color: #666; margin-top: 1rem;">
+                    この設定をオンにすると、あなたが「不快に感じた」と報告した投稿と内容が似ている投稿が、AIによって自動的にモザイク表示されます。
+                </p>
+            </div>
             
             <div class="axis-group">
                 <h2>コンテンツカテゴリの手動設定</h2>

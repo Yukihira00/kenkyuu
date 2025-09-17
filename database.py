@@ -59,11 +59,13 @@ def initialize_database():
         FOREIGN KEY (user_did) REFERENCES users (user_did)
     )''')
     
+    # ▼▼▼【修正】不要な列を削除 ▼▼▼
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS filter_settings (
         setting_id SERIAL PRIMARY KEY, user_did TEXT NOT NULL UNIQUE,
         hidden_content_categories TEXT[] NOT NULL,
         auto_filter_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        similarity_filter_enabled BOOLEAN NOT NULL DEFAULT TRUE,
         updated_at TIMESTAMPTZ NOT NULL,
         FOREIGN KEY (user_did) REFERENCES users (user_did)
     )''')
@@ -111,22 +113,9 @@ def get_unpleasant_feedback_uris(user_did: str) -> list[str]:
     conn.close()
     return [result['post_uri'] for result in results]
 
-def get_learned_unpleasant_categories(user_did: str, threshold: int = 2) -> set[str]:
-    conn = get_connection()
-    cursor = conn.cursor()
-    query = """
-    SELECT category FROM (
-        SELECT cache.content_category AS category FROM unpleasant_feedback AS feedback JOIN post_analysis_cache AS cache ON feedback.post_uri = cache.post_uri WHERE feedback.user_did = %(user_did)s
-        UNION ALL SELECT cache.expression_category AS category FROM unpleasant_feedback AS feedback JOIN post_analysis_cache AS cache ON feedback.post_uri = cache.post_uri WHERE feedback.user_did = %(user_did)s
-        UNION ALL SELECT cache.style_stance_category AS category FROM unpleasant_feedback AS feedback JOIN post_analysis_cache AS cache ON feedback.post_uri = cache.post_uri WHERE feedback.user_did = %(user_did)s
-    ) AS all_categories
-    GROUP BY category HAVING COUNT(*) >= %(threshold)s;
-    """
-    cursor.execute(query, {'user_did': user_did, 'threshold': threshold})
-    results = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return {result['category'] for result in results}
+# ▼▼▼【削除】この関数を削除 ▼▼▼
+# def get_learned_unpleasant_categories(user_did: str, threshold: int = 2) -> set[str]:
+#     ...
 
 def get_unpleasant_post_vectors(user_did: str) -> list[np.ndarray]:
     """指定されたユーザーが不快報告した投稿のベクトルリストを取得する"""
@@ -166,22 +155,28 @@ def get_user_result(user_did: str):
 def get_user_filter_settings(user_did: str):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT hidden_content_categories, auto_filter_enabled FROM filter_settings WHERE user_did = %s", (user_did,))
+    # ▼▼▼【修正】不要な列を削除 ▼▼▼
+    cursor.execute("SELECT hidden_content_categories, auto_filter_enabled, similarity_filter_enabled FROM filter_settings WHERE user_did = %s", (user_did,))
     settings = cursor.fetchone()
     cursor.close()
     conn.close()
     if settings: return settings
-    else: return {'hidden_content_categories': [], 'auto_filter_enabled': True}
+    # ▼▼▼【修正】デフォルト値から不要な項目を削除 ▼▼▼
+    else: return {'hidden_content_categories': [], 'auto_filter_enabled': True, 'similarity_filter_enabled': True}
 
-def save_user_filter_settings(user_did: str, content: list[str], auto_filter: bool):
+# ▼▼▼【修正】関数シグネチャとSQL文を修正 ▼▼▼
+def save_user_filter_settings(user_did: str, content: list[str], auto_filter: bool, similarity_filter: bool):
     conn = get_connection()
     cursor = conn.cursor()
     now = datetime.now()
     cursor.execute('''
-        INSERT INTO filter_settings (user_did, hidden_content_categories, auto_filter_enabled, updated_at) VALUES (%s, %s, %s, %s)
+        INSERT INTO filter_settings (user_did, hidden_content_categories, auto_filter_enabled, similarity_filter_enabled, updated_at) VALUES (%s, %s, %s, %s, %s)
         ON CONFLICT (user_did) DO UPDATE SET
-            hidden_content_categories = EXCLUDED.hidden_content_categories, auto_filter_enabled = EXCLUDED.auto_filter_enabled, updated_at = EXCLUDED.updated_at
-    ''', (user_did, content, auto_filter, now))
+            hidden_content_categories = EXCLUDED.hidden_content_categories, 
+            auto_filter_enabled = EXCLUDED.auto_filter_enabled, 
+            similarity_filter_enabled = EXCLUDED.similarity_filter_enabled, 
+            updated_at = EXCLUDED.updated_at
+    ''', (user_did, content, auto_filter, similarity_filter, now))
     conn.commit()
     cursor.close()
     conn.close()
