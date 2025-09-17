@@ -5,31 +5,26 @@
     <title>タイムライン</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
+    /* (CSSの変更はなし) */
     body { font-family: 'Noto Sans JP', sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; color: #1c1e21; }
     .container { max-width: 680px; margin: 0 auto; }
-    
     .header { background: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; }
     .header-top { display: flex; justify-content: space-between; align-items: center; }
     .header h1 { margin: 0; font-size: 1.2em; }
-
     .hamburger-menu { position: relative; }
     .menu-btn { display: flex; flex-direction: column; justify-content: space-around; width: 30px; height: 25px; background: transparent; border: none; cursor: pointer; padding: 0; z-index: 1001; }
     .menu-btn span { display: block; width: 100%; height: 3px; background-color: #333; border-radius: 3px; transition: all 0.3s ease-in-out; }
-
     .nav-links { list-style: none; position: absolute; top: 40px; right: 0; background: white; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); margin: 0; padding: 10px 0; width: 200px; transform: translateY(-10px); opacity: 0; visibility: hidden; transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s; z-index: 1000; }
     .nav-links.open { opacity: 1; visibility: visible; transform: translateY(0); }
-
     .nav-links li a { display: block; padding: 12px 20px; color: #333; text-decoration: none; font-weight: 500; transition: background-color 0.2s; }
     .nav-links li a:hover { background-color: #f0f2f5; }
     .nav-links .logout a { color: #e74c3c; }
     .nav-links .logout a:hover { background-color: #fbeae8; }
-
     .filter-status { margin-top: 15px; padding-top: 15px; border-top: 1px solid #e4e6eb; font-size: 0.9em; color: #65676b; }
     .filter-status p { margin: 0.5rem 0; }
     .filter-status .status-on { color: #28a745; font-weight: bold; }
     .filter-status .status-off { color: #dc3545; font-weight: bold; }
     .filter-status .category-count { font-weight: bold; }
-
     .post { background: white; padding: 15px 20px; border-radius: 8px; }
     .post-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
     .author-section { display: flex; align-items: center; }
@@ -42,8 +37,6 @@
     .post-images img { max-width: 100%; border-radius: 8px; border: 1px solid #ddd; flex: 1 1 0; cursor: pointer; transition: opacity 0.2s; }
     .post-images img:hover { opacity: 0.8; }
     .post-footer { font-size: 0.8em; color: #65676b; margin-top: 15px; text-align: right; }
-
-    /* ↓↓↓ ここの overflow: hidden; を削除しました ↓↓↓ */
     .post-mosaic-container { position: relative; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 15px; }
     .post-content-hidden { filter: blur(8px) grayscale(50%); transition: filter 0.3s ease-in-out; }
     .post-content-hidden.revealed { filter: none; }
@@ -53,137 +46,66 @@
     .reveal-button:hover { background-color: #0056b3; }
     .analysis-info { color: #333; background-color: rgba(255,255,255,0.8); padding: 8px 12px; border-radius: 8px; font-size: 0.9em; text-align: center; max-width: 80%; border: 1px solid rgba(0,0,0,0.1); }
     .analysis-info-title { display: block; font-weight: bold; color: #0056b3; margin-bottom: 4px; }
-    
-    /* 分析結果表示用のスタイル */
     .post-menu { position: relative; }
     .post-menu-btn { background: none; border: none; font-size: 1.5em; cursor: pointer; color: #65676b; padding: 0 5px; }
-    .analysis-popup {
-        display: none; /* 初期状態では非表示 */
-        position: absolute;
-        top: 30px;
-        right: 0;
-        background: white;
-        border-radius: 8px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-        padding: 15px;
-        width: 250px;
-        z-index: 100;
-    }
+    .analysis-popup { display: none; position: absolute; top: 30px; right: 0; background: white; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); padding: 10px; width: 220px; z-index: 100; }
     .analysis-popup.show { display: block; }
-    .analysis-popup h4 { margin: 0 0 10px 0; font-size: 1em; color: #333; }
     .analysis-popup p { margin: 0 0 5px 0; font-size: 0.9em; }
     .analysis-popup strong { color: #0056b3; }
-
+    .analysis-header { cursor: pointer; transition: background-color 0.2s; padding: 8px; margin: -5px -5px 5px -5px; border-radius: 5px; }
+    .analysis-header:hover { background-color: #f0f2f5; }
+    .analysis-header h4 { margin: 0; font-size: 0.9em; color: #333; font-weight: 500;}
+    .analysis-details { margin-top: 10px; border-top: 1px solid #e4e6eb; padding-top: 10px; }
+    .unpleasant-btn { background: none; border: none; color: #e74c3c; cursor: pointer; padding: 8px; margin: 0 -5px -5px -5px; text-align: left; width: calc(100% + 10px); font-size: 0.9em; font-weight: 500; border-radius: 5px;}
+    .unpleasant-btn:hover { background-color: #fbeae8; }
 </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <div class="header-top">
-                <h1>ようこそ, {{ user.display_name }} さん</h1>
-                <div class="hamburger-menu">
-                    <button class="menu-btn" id="menu-btn">
-                        <span></span>
-                        <span></span>
-                        <span></span>
-                    </button>
-                    <ul class="nav-links" id="nav-links">
-                        <li><a href="/results">診断結果を見る</a></li>
-                        <li><a href="/settings">フィルター設定</a></li>
-                        <li class="logout"><a href="/logout">ログアウト</a></li>
-                    </ul>
-                </div>
-            </div>
-
+            <div class="header-top"><h1>ようこそ, {{ user.display_name }} さん</h1><div class="hamburger-menu"><button class="menu-btn" id="menu-btn"><span></span><span></span><span></span></button><ul class="nav-links" id="nav-links"><li><a href="/results">診断結果を見る</a></li><li><a href="/settings">フィルター設定</a></li><li class="logout"><a href="/logout">ログアウト</a></li></ul></div></div>
             <div class="filter-status">
-                {% if total_post_count > 0 %}
-                    <p>直近{{ total_post_count }}件の投稿のうち、設定に基づいて <strong>{{ hidden_post_count }}</strong> 件をモザイク表示しました。</p>
-                {% endif %}
-                <p>
-                    自動フィルタリング: 
-                    {% if user_settings.auto_filter_enabled %}
-                        <span class="status-on">ON</span>
-                    {% else %}
-                        <span class="status-off">OFF</span>
-                    {% endif %}
-                    |
-                    手動カテゴリ設定: <span class="category-count">{{ user_settings.hidden_content_categories|length }}</span> 件
-                </p>
+                {% if total_post_count > 0 %}<p>直近{{ total_post_count }}件の投稿のうち、設定に基づいて <strong>{{ hidden_post_count }}</strong> 件をモザイク表示しました。</p>{% endif %}
+                <p>自動フィルタリング: {% if user_settings.auto_filter_enabled %}<span class="status-on">ON</span>{% else %}<span class="status-off">OFF</span>{% endif %} | 手動カテゴリ設定: <span class="category-count">{{ user_settings.hidden_content_categories|length }}</span> 件</p>
             </div>
         </div>
         
         {% if feed %}
             {% for item in feed %}
-                <div class="post-mosaic-container">
-                    
+                <div class="post-mosaic-container" id="post-container-{{ item.post.uri }}">
                     {% if item.is_mosaic %}
                     <div class="reveal-overlay">
                         <button class="reveal-button">モザイクを解除して表示する</button>
-                        {% if item.analysis_info %}
-                            <div class="analysis-info">
-                                <span class="analysis-info-title">非表示理由 ({{ item.analysis_info.type }})</span>
-                                {{ item.analysis_info.category }}
-                            </div>
-                        {% endif %}
+                        {% if item.analysis_info %}<div class="analysis-info"><span class="analysis-info-title">非表示理由 ({{ item.analysis_info.type }})</span>{{ item.analysis_info.category }}</div>{% endif %}
                     </div>
                     {% endif %}
-
                     <div class="post {% if item.is_mosaic %}post-content-hidden{% endif %}">
                         <div class="post-header">
-                            <div class="author-section">
-                                <img src="{{ item.post.author.avatar }}" alt="avatar" class="post-avatar">
-                                <div class="post-author-info">
-                                    <strong class="post-author">{{ item.post.author.display_name }}</strong>
-                                    <span class="post-handle">@{{ item.post.author.handle }}</span>
-                                </div>
-                            </div>
-                            <div class="post-menu">
-                                <button class="post-menu-btn" data-uri="{{ item.post.uri }}">…</button>
-                                <div class="analysis-popup" id="popup-{{ item.post.uri }}">
+                            <div class="author-section"><img src="{{ item.post.author.avatar }}" alt="avatar" class="post-avatar"><div class="post-author-info"><strong class="post-author">{{ item.post.author.display_name }}</strong><span class="post-handle">@{{ item.post.author.handle }}</span></div></div>
+                            <div class="post-menu"><button class="post-menu-btn" data-uri="{{ item.post.uri }}">…</button><div class="analysis-popup" id="popup-{{ item.post.uri }}">
                                     {% set post_analysis = analysis_results.get(item.post.uri) %}
                                     {% if post_analysis %}
-                                        <h4>AIによる投稿分析</h4>
-                                        <p><strong>コンテンツ:</strong> {{ post_analysis.content_category }}</p>
-                                        <p><strong>表現:</strong> {{ post_analysis.expression_category }}</p>
-                                        <p><strong>スタイル:</strong> {{ post_analysis.style_stance_category }}</p>
-                                    {% else %}
-                                        <p>分析情報がありません。</p>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
+                                        <div class="analysis-header"><h4>AIによる投稿分析</h4></div>
+                                        <div class="analysis-details" style="display: none;"><p><strong>コンテンツ:</strong> {{ post_analysis.content_category }}</p><p><strong>表現:</strong> {{ post_analysis.expression_category }}</p><p><strong>スタイル:</strong> {{ post_analysis.style_stance_category }}</p></div>
+                                        <button class="unpleasant-btn" data-uri="{{ item.post.uri }}">不快に感じた</button>
+                                    {% else %}<p>分析情報がありません。</p>{% endif %}
+                                </div></div></div>
                         <div class="post-content">{{ item.post.record.text }}</div>
-
-                        {% if item.post.embed and item.post.embed.py_type == 'app.bsky.embed.images#view' %}
-                            <div class="post-images">
-                                {% for image in item.post.embed.images %}
-                                    <a href="{{ image.fullsize }}" target="_blank">
-                                        <img src="{{ image.thumb }}" alt="投稿画像">
-                                    </a>
-                                {% endfor %}
-                            </div>
-                        {% endif %}
-                        <div class="post-footer">
-                            投稿日時: {{ item.post.indexed_at.strftime('%Y-%m-%d %H:%M') }}
-                        </div>
-                    </div>
-                </div>
+                        {% if item.post.embed and item.post.embed.py_type == 'app.bsky.embed.images#view' %}<div class="post-images">{% for image in item.post.embed.images %}<a href="{{ image.fullsize }}" target="_blank"><img src="{{ image.thumb }}" alt="投稿画像"></a>{% endfor %}</div>{% endif %}
+                        <div class="post-footer">投稿日時: {{ item.post.indexed_at.strftime('%Y-%m-%d %H:%M') }}</div>
+                    </div></div>
             {% endfor %}
         {% else %}
-            <div class="post">
-                <p>タイムラインの読み込みに失敗したか、表示できる投稿がありません。</p>
-            </div>
+            <div class="post"><p>タイムラインの読み込みに失敗したか、表示できる投稿がありません。</p></div>
         {% endif %}
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // ハンバーガーメニュー
             const menuBtn = document.getElementById('menu-btn');
             const navLinks = document.getElementById('nav-links');
             menuBtn.addEventListener('click', () => navLinks.classList.toggle('open'));
 
-            // モザイク解除
             document.querySelectorAll('.reveal-button').forEach(button => {
                 button.addEventListener('click', function() {
                     const overlay = this.closest('.reveal-overlay');
@@ -195,34 +117,100 @@
                 });
             });
 
-            // 投稿分析ポップアップ
             const postMenuBtns = document.querySelectorAll('.post-menu-btn');
             postMenuBtns.forEach(btn => {
                 btn.addEventListener('click', (event) => {
                     event.stopPropagation();
                     const uri = btn.dataset.uri;
                     const popup = document.getElementById(`popup-${uri}`);
-                    // 他のポップアップをすべて閉じる
                     document.querySelectorAll('.analysis-popup.show').forEach(p => {
-                        if (p !== popup) p.classList.remove('show');
+                        if (p !== popup) {
+                            p.classList.remove('show');
+                            const details = p.querySelector('.analysis-details');
+                            if (details) details.style.display = 'none';
+                        }
                     });
-                    // クリックされたポップアップの表示を切り替える
                     if (popup) popup.classList.toggle('show');
                 });
             });
+            
+            // ▼▼▼【変更】不快ボタンの処理を修正 ▼▼▼
+            document.querySelectorAll('.unpleasant-btn').forEach(button => {
+                button.addEventListener('click', function(event) {
+                    event.stopPropagation();
+                    const uri = this.dataset.uri;
+                    const postContainer = document.getElementById(`post-container-${uri}`);
+                    
+                    fetch('/report_unpleasant', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ uri: uri })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if(data.success) {
+                            alert('フィードバックを送信しました。この投稿は非表示になります。');
+                            
+                            // 即座にモザイクをかける
+                            if(postContainer) {
+                                // 既にオーバーレイがあるか確認
+                                let overlay = postContainer.querySelector('.reveal-overlay');
+                                if (!overlay) {
+                                    // オーバーレイがなければ新しく作成
+                                    overlay = document.createElement('div');
+                                    overlay.className = 'reveal-overlay';
+                                    overlay.innerHTML = `
+                                        <button class="reveal-button">モザイクを解除して表示する</button>
+                                        <div class="analysis-info">
+                                            <span class="analysis-info-title">非表示理由 (不快な投稿)</span>
+                                            あなたが報告した投稿
+                                        </div>
+                                    `;
+                                    postContainer.prepend(overlay);
+                                    
+                                    // 作成した解除ボタンにイベントリスナーを再度設定
+                                    overlay.querySelector('.reveal-button').addEventListener('click', function() {
+                                        overlay.classList.add('hidden');
+                                        postContainer.querySelector('.post').classList.remove('post-content-hidden');
+                                    });
+                                }
+                                postContainer.querySelector('.post').classList.add('post-content-hidden');
+                            }
+                            
+                            // ポップアップを閉じる
+                            const popup = this.closest('.analysis-popup');
+                            if (popup) popup.classList.remove('show');
+                        } else {
+                            alert('報告に失敗しました。');
+                        }
+                    });
+                });
+            });
+            
+            document.querySelectorAll('.analysis-header').forEach(header => {
+                header.addEventListener('click', function(event) {
+                    event.stopPropagation();
+                    const container = this.closest('.analysis-popup');
+                    const detailsDiv = container.querySelector('.analysis-details');
+                    if (detailsDiv) {
+                        detailsDiv.style.display = (detailsDiv.style.display === 'none') ? 'block' : 'none';
+                    }
+                });
+            });
 
-            // ドキュメント全体をクリックしたときの処理
             document.addEventListener('click', (event) => {
-                // ハンバーガーメニューを閉じる
                 const isClickInsideMenu = menuBtn.contains(event.target) || navLinks.contains(event.target);
                 if (!isClickInsideMenu && navLinks.classList.contains('open')) {
                     navLinks.classList.remove('open');
                 }
-                // 分析ポップアップを閉じる
                 const isClickInsidePopup = event.target.closest('.analysis-popup');
                 const isClickInsideMenuBtn = event.target.closest('.post-menu-btn');
                 if (!isClickInsidePopup && !isClickInsideMenuBtn) {
-                    document.querySelectorAll('.analysis-popup.show').forEach(p => p.classList.remove('show'));
+                    document.querySelectorAll('.analysis-popup.show').forEach(p => {
+                        p.classList.remove('show');
+                        const details = p.querySelector('.analysis-details');
+                        if (details) details.style.display = 'none';
+                    });
                 }
             });
         });

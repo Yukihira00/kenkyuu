@@ -2,24 +2,17 @@
 from datetime import datetime
 import secrets
 from fastapi import FastAPI, Request, Form
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
+from pydantic import BaseModel
 
-# 自作モジュールのインポート
-import database
-import quiz_checker
-import timeline_checker
-import personality_descriptions
-import llm_analyzer
-import type_descriptions
+import database, quiz_checker, timeline_checker, personality_descriptions, llm_analyzer, type_descriptions
 
-# --- アプリケーションの初期設定 ---
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key=secrets.token_hex(32))
 templates = Jinja2Templates(directory="templates")
 
-# --- タイプ分類ロジック ---
 def get_64_type(scores: dict) -> str:
     mbti_type = ""
     mbti_type += "E" if scores.get('X', 0) >= 3.0 else "I"
@@ -30,7 +23,6 @@ def get_64_type(scores: dict) -> str:
     light_dark = "L" if scores.get('H', 0) >= 3.0 else "D"
     return f"{mbti_type}-{turbulence_assertiveness}{light_dark}"
 
-# --- ルート設定 ---
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     return RedirectResponse(url="/login") if 'user_did' not in request.session else RedirectResponse(url="/timeline")
@@ -43,15 +35,12 @@ async def login_form(request: Request):
 async def login_process(request: Request, handle: str = Form(...), app_password: str = Form(...)):
     user_profile = timeline_checker.verify_login_and_get_profile(handle, app_password)
     if user_profile:
-        # --- BUG FIX: セッションキーを 'user_did' に統一 ---
         request.session['user_did'] = user_profile['did']
         request.session['handle'] = user_profile['handle']
         request.session['display_name'] = user_profile['display_name']
         request.session['app_password'] = app_password
-        
         has_result = database.get_user_result(user_profile['did'])
         return RedirectResponse(url="/timeline", status_code=303) if has_result else RedirectResponse(url="/quiz", status_code=303)
-    
     return templates.TemplateResponse("login.html", {"request": request, "error": "ハンドルまたはアプリパスワードが間違っています。"})
 
 @app.get("/quiz", response_class=HTMLResponse)
@@ -64,12 +53,10 @@ async def submit_quiz(request: Request):
     if 'user_did' not in request.session: return RedirectResponse(url="/login")
     form_data = await request.form()
     answers = [int(form_data[f'q{i}']) for i in range(1, len(quiz_checker.QUESTIONS_DATA) + 1) if f'q{i}' in form_data]
-    
     if len(answers) == len(quiz_checker.QUESTIONS_DATA):
         scores = quiz_checker.calculate_scores(answers)
         database.add_or_update_hexaco_result(request.session['user_did'], request.session['handle'], scores)
         return RedirectResponse(url="/results", status_code=303)
-    
     return templates.TemplateResponse("quiz.html", {"request": request, "questions": quiz_checker.QUESTIONS_DATA, "error": "すべての質問に回答してください。"})
 
 @app.get("/timeline", response_class=HTMLResponse)
@@ -80,6 +67,9 @@ async def show_timeline(request: Request):
     user_filter_settings = database.get_user_filter_settings(user_did)
     user_scores = database.get_user_result(user_did)
     hidden_content = set(user_filter_settings.get('hidden_content_categories', []))
+    
+    # ▼▼▼【変更】不快報告した投稿のURIリストを取得 ▼▼▼
+    unpleasant_uris = set(database.get_unpleasant_feedback_uris(user_did))
 
     raw_feed = timeline_checker.get_timeline_data(request.session['handle'], request.session['app_password'], limit=50)
     if not raw_feed:
@@ -109,7 +99,11 @@ async def show_timeline(request: Request):
         analysis_result = cached_results.get(item.post.uri)
         item.is_mosaic = False
         
-        if analysis_result:
+        # ▼▼▼【変更】モザイク表示の条件に「不快報告」を追加 ▼▼▼
+        if item.post.uri in unpleasant_uris:
+            item.is_mosaic = True
+            item.analysis_info = {"type": "不快な投稿", "category": "あなたが報告した投稿"}
+        elif analysis_result:
             if analysis_result.get("content_category") in hidden_content:
                 item.is_mosaic = True
                 item.analysis_info = {"type": "コンテンツ", "category": analysis_result.get("content_category")}
@@ -167,23 +161,21 @@ async def save_settings(request: Request):
     hidden_content = form_data.getlist("hidden_content")
     auto_filter_enabled = form_data.get("auto_filter_switch") == "on"
     database.save_user_filter_settings(request.session['user_did'], hidden_content, auto_filter_enabled)
-    
-    # データを再取得してテンプレートに渡す
-    user_settings = database.get_user_filter_settings(request.session['user_did'])
-    user_scores = database.get_user_result(request.session['user_did'])
-    active_rules = {}
-    if user_scores:
-        for trait, rules in personality_descriptions.FILTERING_RULES.items():
-            level = 'high' if user_scores[trait.lower()] >= 3.0 else 'low'
-            active_rules[rules['name']] = rules[level]['categories']
             
-    return templates.TemplateResponse("settings.html", {
-        "request": request,
-        "user_settings": user_settings,
-        "all_content_categories": llm_analyzer.CONTENT_CATEGORIES,
-        "active_rules": active_rules,
-        "save_success": True
-    })
+    return RedirectResponse(url="/settings", status_code=303)
+
+class ReportPayload(BaseModel):
+    uri: str
+
+@app.post("/report_unpleasant")
+async def report_unpleasant(request: Request, payload: ReportPayload):
+    if 'user_did' not in request.session:
+        return JSONResponse(content={"success": False, "error": "Not logged in"}, status_code=401)
+    
+    user_did = request.session['user_did']
+    post_uri = payload.uri
+    database.add_unpleasant_feedback(user_did, post_uri)
+    return JSONResponse(content={"success": True})
 
 if __name__ == "__main__":
     import uvicorn
