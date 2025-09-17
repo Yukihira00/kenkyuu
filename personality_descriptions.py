@@ -68,3 +68,37 @@ DESCRIPTIONS = {
         }
     }
 }
+
+# 自動フィルタリングのルールを定義
+FILTERING_RULES = {
+    'H': {
+        'name': '正直さ-謙虚さ',
+        'high': {'categories': ["大げさな表現・釣りタイトル", "自慢話", "ステマ"], 'type': 'style'},
+        'low': {'categories': ["教訓めいた投稿", "過度なへりくだり・自虐"], 'type': 'style'}
+    },
+    'E': {
+        'name': '情動性',
+        'high': {'categories': ["否定的・批判的", "ショッキングな表現"], 'type': 'expression'},
+        'low': {'categories': ["感傷的なポエム", "感情的な共感を求める投稿"], 'type': 'style'}
+    },
+    'X': {
+        'name': '外向性',
+        'high': {'categories': ["専門的な長文解説", "内省的・静的なトーン"], 'type': 'style'},
+        'low': {'categories': ["派手・注目目的の投稿", "大人数での交流を促す投稿"], 'type': 'style'}
+    },
+    'A': {
+        'name': '協調性',
+        'high': {'categories': ["批判・論争的", "対立を煽る投稿"], 'type': 'style'},
+        'low': {'categories': ["建前・本音が見えない投稿", "当たり障りのない意見"], 'type': 'style'}
+    },
+    'C': {
+        'name': '勤勉性',
+        'high': {'categories': ["不正確・論理破綻", "誤字脱字が多い"], 'type': 'style'},
+        'low': {'categories': ["細かいルール・手順の説明", "緻密なデータ・分析"], 'type': 'style'}
+    },
+    'O': {
+        'name': '開放性',
+        'high': {'categories': ["平凡な日常報告", "ありきたりな内容"], 'type': 'style'},
+        'low': {'categories': ["抽象的・アート系", "突飛なアイデア"], 'type': 'style'}
+    }
+}

@@ -12,80 +12,23 @@
     .header-top { display: flex; justify-content: space-between; align-items: center; }
     .header h1 { margin: 0; font-size: 1.2em; }
 
-    .hamburger-menu {
-        position: relative;
-    }
+    .hamburger-menu { position: relative; }
+    .menu-btn { display: flex; flex-direction: column; justify-content: space-around; width: 30px; height: 25px; background: transparent; border: none; cursor: pointer; padding: 0; z-index: 1001; }
+    .menu-btn span { display: block; width: 100%; height: 3px; background-color: #333; border-radius: 3px; transition: all 0.3s ease-in-out; }
 
-    .menu-btn {
-        display: flex;
-        flex-direction: column;
-        justify-content: space-around;
-        width: 30px;
-        height: 25px;
-        background: transparent;
-        border: none;
-        cursor: pointer;
-        padding: 0;
-        z-index: 1001;
-    }
-    .menu-btn span {
-        display: block;
-        width: 100%;
-        height: 3px;
-        background-color: #333;
-        border-radius: 3px;
-        transition: all 0.3s ease-in-out;
-    }
+    .nav-links { list-style: none; position: absolute; top: 40px; right: 0; background: white; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); margin: 0; padding: 10px 0; width: 200px; transform: translateY(-10px); opacity: 0; visibility: hidden; transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s; z-index: 1000; }
+    .nav-links.open { opacity: 1; visibility: visible; transform: translateY(0); }
 
-    .nav-links {
-        list-style: none;
-        position: absolute;
-        top: 40px;
-        right: 0;
-        background: white;
-        border-radius: 8px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-        margin: 0;
-        padding: 10px 0;
-        width: 200px;
-        transform: translateY(-10px);
-        opacity: 0;
-        visibility: hidden;
-        transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s;
-        z-index: 1000;
-    }
-    .nav-links.open {
-        opacity: 1;
-        visibility: visible;
-        transform: translateY(0);
-    }
+    .nav-links li a { display: block; padding: 12px 20px; color: #333; text-decoration: none; font-weight: 500; transition: background-color 0.2s; }
+    .nav-links li a:hover { background-color: #f0f2f5; }
+    .nav-links .logout a { color: #e74c3c; }
+    .nav-links .logout a:hover { background-color: #fbeae8; }
 
-    .nav-links li a {
-        display: block;
-        padding: 12px 20px;
-        color: #333;
-        text-decoration: none;
-        font-weight: 500;
-        transition: background-color 0.2s;
-    }
-    .nav-links li a:hover {
-        background-color: #f0f2f5;
-    }
-    .nav-links .logout a {
-        color: #e74c3c;
-    }
-    .nav-links .logout a:hover {
-        background-color: #fbeae8;
-    }
-
-    .filter-status {
-        margin-top: 15px;
-        padding-top: 15px;
-        border-top: 1px solid #e4e6eb;
-        font-size: 0.95em;
-        color: #65676b;
-        text-align: center;
-    }
+    .filter-status { margin-top: 15px; padding-top: 15px; border-top: 1px solid #e4e6eb; font-size: 0.9em; color: #65676b; }
+    .filter-status p { margin: 0.5rem 0; }
+    .filter-status .status-on { color: #28a745; font-weight: bold; }
+    .filter-status .status-off { color: #dc3545; font-weight: bold; }
+    .filter-status .category-count { font-weight: bold; }
 
     .post { background: white; padding: 15px 20px; border-radius: 8px; }
     .post-header { display: flex; align-items: center; margin-bottom: 12px; }
@@ -102,12 +45,12 @@
     .post-mosaic-container { position: relative; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 15px; overflow: hidden; }
     .post-content-hidden { filter: blur(8px) grayscale(50%); transition: filter 0.3s ease-in-out; }
     .post-content-hidden.revealed { filter: none; }
-    .reveal-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: rgba(255, 255, 255, 0.5); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition: opacity 0.3s ease-in-out; z-index: 10; }
+    .reveal-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: rgba(255, 255, 255, 0.6); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition: opacity 0.3s ease-in-out; z-index: 10; }
     .reveal-overlay.hidden { opacity: 0; pointer-events: none; }
     .reveal-button { background-color: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 1em; font-weight: 600; transition: background-color 0.2s; margin-bottom: 10px; }
     .reveal-button:hover { background-color: #0056b3; }
-    .analysis-info { color: #333; background-color: rgba(255,255,255,0.7); padding: 5px 10px; border-radius: 5px; font-size: 0.85em; text-align: center; max-width: 80%; }
-    .analysis-info strong { color: #0056b3; }
+    .analysis-info { color: #333; background-color: rgba(255,255,255,0.8); padding: 8px 12px; border-radius: 8px; font-size: 0.9em; text-align: center; max-width: 80%; border: 1px solid rgba(0,0,0,0.1); }
+    .analysis-info-title { display: block; font-weight: bold; color: #0056b3; margin-bottom: 4px; }
 </style>
 </head>
 <body>
@@ -129,11 +72,21 @@
                 </div>
             </div>
 
-            {% if total_post_count > 0 %}
             <div class="filter-status">
-                直近{{ total_post_count }}件の投稿のうち、設定に基づいて <strong>{{ hidden_post_count }}</strong> 件の投稿をモザイク表示しました。
+                {% if total_post_count > 0 %}
+                    <p>直近{{ total_post_count }}件の投稿のうち、設定に基づいて <strong>{{ hidden_post_count }}</strong> 件をモザイク表示しました。</p>
+                {% endif %}
+                <p>
+                    自動フィルタリング: 
+                    {% if user_settings.auto_filter_enabled %}
+                        <span class="status-on">ON</span>
+                    {% else %}
+                        <span class="status-off">OFF</span>
+                    {% endif %}
+                    |
+                    手動カテゴリ設定: <span class="category-count">{{ user_settings.hidden_content_categories|length }}</span> 件
+                </p>
             </div>
-            {% endif %}
         </div>
         
         {% if feed %}
@@ -145,8 +98,8 @@
                         <button class="reveal-button">モザイクを解除して表示する</button>
                         {% if item.analysis_info %}
                             <div class="analysis-info">
-                                <strong>非表示理由:</strong><br>
-                                {{ item.analysis_info.content_category }}
+                                <span class="analysis-info-title">非表示理由 ({{ item.analysis_info.type }})</span>
+                                {{ item.analysis_info.category }}
                             </div>
                         {% endif %}
                     </div>

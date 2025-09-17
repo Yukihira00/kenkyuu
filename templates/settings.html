@@ -6,52 +6,90 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Noto Sans JP', sans-serif; background-color: #f7f9fc; color: #333; margin: 0; padding: 2rem; }
-        .container { max-width: 900px; margin: 0 auto; background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 8px 25px rgba(0,0,0,0.08); }
-        h1 { text-align: center; }
-        .settings-form { margin-top: 2rem; }
-        .axis-group { margin-bottom: 2.5rem; }
-        .axis-group > h2 { font-size: 1.6em; border-bottom: 2px solid #007bff; color: #007bff; padding-bottom: 0.5rem; margin-bottom: 1.5rem; }
+        .container { max-width: 900px; margin: 0 auto; background: white; padding: 2.5rem; border-radius: 12px; box-shadow: 0 8px 25px rgba(0,0,0,0.08); }
+        h1 { text-align: center; color: #333; }
+        .settings-form { margin-top: 2.5rem; }
+        .axis-group { margin-bottom: 3rem; border-top: 1px solid #e9ecef; padding-top: 2rem; }
+        .axis-group > h2 { font-size: 1.6em; color: #007bff; padding-bottom: 0.5rem; margin-top: 0; margin-bottom: 1.5rem; display: flex; align-items: center;}
         .category-group { margin-bottom: 1.5rem; }
         .category-group h3 { font-size: 1.2em; color: #333; margin-bottom: 1rem; padding-left: 0.5rem; border-left: 4px solid #007bff; }
         .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.8rem; padding-left: 1rem; }
         
-        .checkbox-label {
-            display: flex;
-            align-items: center;
-            cursor: pointer;
-            padding: 2px;
-        }
-        .checkbox-label input {
-            margin-right: 0.7rem;
-        }
+        .checkbox-label { display: flex; align-items: center; cursor: pointer; padding: 2px; }
+        .checkbox-label input { margin-right: 0.7rem; }
 
-        .button-container { text-align: center; margin-top: 2rem; }
-        .button { background-color: #007bff; color: white; padding: 0.8rem 2rem; border-radius: 5px; border: none; font-size: 1.1em; cursor: pointer; transition: background-color 0.2s; }
+        .button-container { text-align: center; margin-top: 2.5rem; }
+        .button { background-color: #007bff; color: white; padding: 0.8rem 2.5rem; border-radius: 5px; border: none; font-size: 1.1em; cursor: pointer; transition: background-color 0.2s; font-weight: 500;}
         .button:hover { background-color: #0056b3; }
-        .nav-link { display: block; text-align: center; margin-top: 1rem; }
+        .nav-link { display: block; text-align: center; margin-top: 1rem; color: #007bff; text-decoration: none; }
+        .nav-link:hover { text-decoration: underline; }
 
-        .success-message {
-            text-align: center;
-            color: #27ae60;
-            font-weight: 500;
-            margin-top: 1rem;
-            background-color: #e9f7ef;
-            padding: 0.8rem;
-            border-radius: 5px;
-            border: 1px solid #a7d7c5;
-            display: none; 
-        }
+        .success-message { text-align: center; color: #27ae60; font-weight: 500; margin-top: 1rem; background-color: #e9f7ef; padding: 0.8rem; border-radius: 5px; border: 1px solid #a7d7c5; display: none; }
+        
+        /* トグルスイッチ */
+        .switch-container { display: flex; align-items: center; justify-content: space-between; padding: 1rem; background: #f8f9fa; border-radius: 8px; }
+        .switch-label { font-size: 1.1em; font-weight: 500; }
+        .switch { position: relative; display: inline-block; width: 60px; height: 34px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #28a745; }
+        input:checked + .slider:before { transform: translateX(26px); }
+
+        /* 自動フィルタリングルールの表示 */
+        .rules-display { margin-top: 1.5rem; padding: 1.5rem; background-color: #f8f9fa; border-radius: 8px; }
+        .rules-display h3 { margin-top: 0; font-size: 1.2em; color: #333; }
+        .rules-list { list-style-type: none; padding-left: 0; }
+        .rules-list li { margin-bottom: 1rem; }
+        .rules-list strong { color: #0056b3; font-weight: 700; }
+        .rules-list .categories { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+        .rules-list .category-tag { background-color: #e9ecef; color: #495057; padding: 0.3rem 0.8rem; border-radius: 1rem; font-size: 0.9em; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>フィルター設定</h1>
-        <p style="text-align: center;">非表示にしたい投稿のカテゴリを選択してください。</p>
+        <p style="text-align: center; color: #666;">タイムラインに表示したくない投稿の種類を選択してください。</p>
 
         <form class="settings-form" id="settings-form" action="/settings" method="post">
             
             <div class="axis-group">
-                <h2>コンテンツカテゴリ</h2>
+                <h2>性格診断に基づく自動フィルタリング</h2>
+                <div class="switch-container">
+                    <span class="switch-label">あなたの性格に合わない投稿を自動で非表示にする</span>
+                    <label class="switch">
+                        <input type="checkbox" name="auto_filter_switch" {% if user_settings.auto_filter_enabled %}checked{% endif %}>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <p style="font-size: 0.9em; color: #666; margin-top: 1rem;">
+                    この設定をオンにすると、あなたのHEXACO診断結果に基づいて、不快に感じる可能性のある投稿が自動的にモザイク表示されます。
+                </p>
+
+                {% if user_settings.auto_filter_enabled and active_rules %}
+                <div class="rules-display">
+                    <h3>現在あなたに適用中のフィルタリングルール</h3>
+                    <ul class="rules-list">
+                        {% for trait_name, categories in active_rules.items() %}
+                        <li>
+                            <strong>{{ trait_name }}の特性により、以下の投稿を非表示にしています:</strong>
+                            <div class="categories">
+                                {% for category in categories %}
+                                    <span class="category-tag">{{ category }}</span>
+                                {% endfor %}
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+            
+            <div class="axis-group">
+                <h2>コンテンツカテゴリの手動設定</h2>
+                <p style="font-size: 0.9em; color: #666; margin-top: 1rem;">
+                    自動フィルタリングに加えて、特定のトピックの投稿を非表示にしたい場合は以下から選択してください。
+                </p>
                 {% for group_name, items in all_content_categories.items() %}
                 <div class="category-group">
                     <h3>{{ group_name }}</h3>

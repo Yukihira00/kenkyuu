@@ -29,7 +29,6 @@ def initialize_database():
     conn = get_connection()
     cursor = conn.cursor()
 
-    # (users, hexaco_results テーブルの作成は変更なし)
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS users (
         user_did TEXT PRIMARY KEY,
@@ -49,18 +48,18 @@ def initialize_database():
     )
     ''')
     
-    # ★★★ filter_settings テーブルの定義を修正 ★★★
+    # filter_settings テーブルの定義を修正
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS filter_settings (
         setting_id SERIAL PRIMARY KEY,
         user_did TEXT NOT NULL UNIQUE,
         hidden_content_categories TEXT[] NOT NULL,
+        auto_filter_enabled BOOLEAN NOT NULL DEFAULT TRUE, -- 自動フィルタリングの有効/無効
         updated_at TIMESTAMPTZ NOT NULL,
         FOREIGN KEY (user_did) REFERENCES users (user_did)
     )
     ''')
 
-    # ★★★ 分析結果をキャッシュするテーブルを追加 ★★★
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS post_analysis_cache (
         post_uri TEXT PRIMARY KEY,
@@ -70,7 +69,6 @@ def initialize_database():
         analyzed_at TIMESTAMPTZ NOT NULL
     )
     ''')
-
 
     conn.commit()
     cursor.close()
@@ -128,8 +126,8 @@ def get_user_filter_settings(user_did: str):
     conn = get_connection()
     cursor = conn.cursor()
     
-    # ★★★ 取得するカラムを修正 ★★★
-    cursor.execute("SELECT hidden_content_categories FROM filter_settings WHERE user_did = %s", (user_did,))
+    # 取得するカラムを修正
+    cursor.execute("SELECT hidden_content_categories, auto_filter_enabled FROM filter_settings WHERE user_did = %s", (user_did,))
     settings = cursor.fetchone()
     
     cursor.close()
@@ -138,25 +136,27 @@ def get_user_filter_settings(user_did: str):
     if settings:
         return settings
     else:
-        # ★★★ 返す辞書のキーを修正 ★★★
+        # 返す辞書のキーを修正
         return {
-            'hidden_content_categories': []
+            'hidden_content_categories': [],
+            'auto_filter_enabled': True # デフォルト値
         }
 
-def save_user_filter_settings(user_did: str, content: list[str]):
+def save_user_filter_settings(user_did: str, content: list[str], auto_filter: bool):
     """ユーザーのフィルター設定を保存または更新する"""
     conn = get_connection()
     cursor = conn.cursor()
     now = datetime.now()
     
-    # ★★★ 保存するクエリとパラメータを修正 ★★★
+    # 保存するクエリとパラメータを修正
     cursor.execute('''
-        INSERT INTO filter_settings (user_did, hidden_content_categories, updated_at)
-        VALUES (%s, %s, %s)
+        INSERT INTO filter_settings (user_did, hidden_content_categories, auto_filter_enabled, updated_at)
+        VALUES (%s, %s, %s, %s)
         ON CONFLICT (user_did) DO UPDATE SET
             hidden_content_categories = EXCLUDED.hidden_content_categories,
+            auto_filter_enabled = EXCLUDED.auto_filter_enabled,
             updated_at = EXCLUDED.updated_at
-    ''', (user_did, content, now))
+    ''', (user_did, content, auto_filter, now))
     
     conn.commit()
     cursor.close()
@@ -198,7 +198,6 @@ def save_analysis_results(post_uri: str, analysis_result: dict):
     ''', (
         post_uri,
         analysis_result.get('content_category', 'N/A'),
-        # ★★★ 以下の2行は後々llm_analyzer側の修正で不要になるが、キャッシュテーブルの構造は維持するため残す ★★★
         analysis_result.get('expression_category', 'N/A'),
         analysis_result.get('style_stance_category', 'N/A'),
         now

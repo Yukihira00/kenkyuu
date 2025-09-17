@@ -108,7 +108,7 @@ async def submit_quiz(request: Request):
 @app.get("/timeline", response_class=HTMLResponse)
 async def show_timeline(request: Request):
     if 'user_did' not in request.session:
-        return RedirectResponse(url="/login", status_code=302)
+        return RedirectResponse(url="/timeline", status_code=302)
 
     user_did = request.session['user_did']
     handle = request.session.get('user_handle')
@@ -116,17 +116,15 @@ async def show_timeline(request: Request):
 
     user_info = {"did": user_did, "handle": handle, "display_name": request.session.get('user_display_name') or handle}
     user_filter_settings = database.get_user_filter_settings(user_did)
+    user_scores = database.get_user_result(user_did)
+    
     hidden_content = set(user_filter_settings.get('hidden_content_categories', []))
 
     raw_feed = timeline_checker.get_timeline_data(handle, app_password, limit=50) 
     if not raw_feed:
-        # ★★★ エラー回避のため、カテゴリリストとユーザー設定を渡すように修正 ★★★
         return templates.TemplateResponse("timeline.html", {
-            "request": request, 
-            "user": user_info, 
-            "feed": [], 
-            "hidden_post_count": 0, 
-            "total_post_count": 0,
+            "request": request, "user": user_info, "feed": [], 
+            "hidden_post_count": 0, "total_post_count": 0,
             "user_settings": user_filter_settings
         })
 
@@ -136,24 +134,20 @@ async def show_timeline(request: Request):
     posts_to_analyze_map = {}
     for item in raw_feed:
         post_uri = item.post.uri
-        post_text = item.post.record.text.strip() if item.post.record.text else ""
+        post_text = item.post.record.text.strip() if hasattr(item.post.record, 'text') and item.post.record.text else ""
         if post_uri not in cached_results and post_text:
             posts_to_analyze_map[post_uri] = post_text
 
-    newly_analyzed_results = {}
     if posts_to_analyze_map:
         uris_to_analyze = list(posts_to_analyze_map.keys())
         texts_to_analyze = list(posts_to_analyze_map.values())
-        
         llm_results = llm_analyzer.analyze_posts_batch(texts_to_analyze)
         
         for i, uri in enumerate(uris_to_analyze):
             result = llm_results[i]
             if result:
-                newly_analyzed_results[uri] = result
+                cached_results[uri] = result
                 database.save_analysis_results(uri, result)
-
-    all_analysis_results = {**cached_results, **newly_analyzed_results}
 
     processed_feed = []
     hidden_post_count = 0
@@ -162,27 +156,46 @@ async def show_timeline(request: Request):
             dt_str = item.post.indexed_at.replace('Z', '+00:00')
             item.post.indexed_at = datetime.fromisoformat(dt_str)
 
-        analysis_result = all_analysis_results.get(item.post.uri)
-        item.analysis_info = analysis_result
+        analysis_result = cached_results.get(item.post.uri)
+        item.analysis_info = None
         item.is_mosaic = False
-
+        
         if analysis_result:
-            if analysis_result.get("content_category") in hidden_content:
+            content_cat = analysis_result.get("content_category")
+            
+            # 1. コンテンツカテゴリによるフィルタリング
+            if content_cat in hidden_content:
                 item.is_mosaic = True
+                item.analysis_info = {"type": "コンテンツ", "category": content_cat}
+
+            # 2. 性格診断に基づく自動フィルタリング
+            if not item.is_mosaic and user_filter_settings.get('auto_filter_enabled') and user_scores:
+                for trait, rules in personality_descriptions.FILTERING_RULES.items():
+                    score_key = trait.lower()
+                    level = 'high' if user_scores[score_key] >= 3.0 else 'low'
+                    
+                    rule = rules[level]
+                    target_category_type = rule['type']
+                    target_categories = rule['categories']
+                    
+                    # 投稿の分析結果が、ルールのカテゴリタイプと一致するか確認
+                    post_category = analysis_result.get(f"{target_category_type}_category")
+                    
+                    if post_category in target_categories:
+                        item.is_mosaic = True
+                        item.analysis_info = {"type": "性格診断", "category": post_category}
+                        break # 一致したらループを抜ける
         
         if item.is_mosaic:
             hidden_post_count += 1
-            
+
         processed_feed.append(item)
 
-    # ★★★ エラー回避のため、カテゴリリストとユーザー設定を渡すように修正 ★★★
     return templates.TemplateResponse("timeline.html", {
-        "request": request,
-        "user": user_info,
-        "feed": processed_feed,
-        "hidden_post_count": hidden_post_count,
-        "total_post_count": len(raw_feed),
-        "user_settings": user_filter_settings
+        "request": request, "user": user_info, "feed": processed_feed,
+        "hidden_post_count": hidden_post_count, "total_post_count": len(raw_feed),
+        "user_settings": user_filter_settings,
+        "analysis_results": cached_results # 全投稿の分析結果を渡す
     })
 
 
@@ -205,28 +218,35 @@ async def show_results(request: Request):
     personality_type_64_code = get_64_type(scores)
     
     type_info = type_descriptions.TYPE_DESCRIPTIONS.get(personality_type_64_code, {
-        "title": "測定不能",
-        "type_name": "不明",
-        "description": "タイプを特定できませんでした。"
+        "title": "測定不能", "type_name": "不明", "description": "タイプを特定できませんでした。"
     })
 
     return templates.TemplateResponse("results.html", {
-        "request": request, 
-        "scores": scores, 
-        "descriptions": personality_descriptions.DESCRIPTIONS,
-        "type_info": type_info
+        "request": request, "scores": scores, 
+        "descriptions": personality_descriptions.DESCRIPTIONS, "type_info": type_info
     })
 
 @app.get("/settings", response_class=HTMLResponse)
 async def show_settings(request: Request):
     if 'user_did' not in request.session:
         return RedirectResponse(url="/login", status_code=302)
+    
     user_did = request.session['user_did']
     user_settings = database.get_user_filter_settings(user_did)
+    user_scores = database.get_user_result(user_did)
+    
+    active_rules = {}
+    if user_scores:
+        for trait, rules in personality_descriptions.FILTERING_RULES.items():
+            score_key = trait.lower()
+            level = 'high' if user_scores[score_key] >= 3.0 else 'low'
+            active_rules[rules['name']] = rules[level]['categories']
+
     return templates.TemplateResponse("settings.html", {
         "request": request,
         "user_settings": user_settings,
         "all_content_categories": llm_analyzer.CONTENT_CATEGORIES,
+        "active_rules": active_rules
     })
 
 @app.post("/settings")
@@ -238,18 +258,28 @@ async def save_settings(request: Request):
     form_data = await request.form()
     
     hidden_content = form_data.getlist("hidden_content")
+    auto_filter_enabled = form_data.get("auto_filter_switch") == "on"
     
-    database.save_user_filter_settings(user_did, hidden_content)
+    database.save_user_filter_settings(user_did, hidden_content, auto_filter_enabled)
     
+    # 保存後に再度設定を読み込んで表示
     user_settings = database.get_user_filter_settings(user_did)
+    user_scores = database.get_user_result(user_did)
+    active_rules = {}
+    if user_scores:
+        for trait, rules in personality_descriptions.FILTERING_RULES.items():
+            score_key = trait.lower()
+            level = 'high' if user_scores[score_key] >= 3.0 else 'low'
+            active_rules[rules['name']] = rules[level]['categories']
+            
     return templates.TemplateResponse("settings.html", {
         "request": request,
         "user_settings": user_settings,
         "all_content_categories": llm_analyzer.CONTENT_CATEGORIES,
+        "active_rules": active_rules,
         "save_success": True
     })
 
-# The following code is for deployment and should not be changed.
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
