@@ -9,6 +9,41 @@
         body { font-family: 'Noto Sans JP', sans-serif; background-color: #f7f9fc; color: #333; margin: 0; padding: 2rem; }
         .container { max-width: 800px; margin: 0 auto; background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 8px 25px rgba(0,0,0,0.08); }
         h1, h2 { text-align: center; }
+        
+        /* 64タイプ表示用のスタイル */
+        .personality-type-64 {
+            text-align: center;
+            margin-bottom: 2.5rem;
+            padding: 1.5rem;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+        .personality-type-64 p {
+            font-size: 1.1em;
+            color: #6c757d;
+            margin: 0;
+        }
+        .personality-type-64 .type-title {
+            font-size: 2.2em;
+            color: #007bff;
+            margin: 0.5rem 0;
+            font-weight: 700;
+        }
+        .personality-type-64 .type-name {
+            font-size: 1.2em;
+            color: #343a40;
+            font-weight: 500;
+            margin-bottom: 1rem;
+        }
+        .personality-type-64 .type-description {
+            font-size: 1.05em;
+            color: #495057;
+            line-height: 1.6;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
         .chart-container { position: relative; width: 90%; max-width: 550px; margin: 2rem auto; }
         .result-card { border: 1px solid #ddd; border-radius: 8px; margin-bottom: 1.5rem; padding: 1.5rem; }
         .trait-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #eee; padding-bottom: 0.5rem; margin-bottom: 1rem; }
@@ -24,6 +59,13 @@
 <body>
     <div class="container">
         <h1>HEXACO-JPモデル性格診断の結果</h1>
+
+        <div class="personality-type-64">
+            <p>あなたのタイプは...</p>
+            <h2 class="type-title">{{ type_info.title }}</h2>
+            <p class="type-name">{{ type_info.type_name }}</p>
+            <p class="type-description">{{ type_info.description }}</p>
+        </div>
 
         <div class="chart-container">
             <canvas id="hexacoChart"></canvas>
@@ -53,8 +95,6 @@
     </div>
 
     <script>
-        // サーバーから渡されたスコアデータをJSONとして受け取ります
-        console.log('この行のエラーは無視されます');
         const scoresData = {{ scores | tojson }};
 
         const chartLabels = [
@@ -66,7 +106,6 @@
             labels: chartLabels,
             datasets: [{
                 label: '性格診断結果',
-                // scoresDataから大文字のキーで各スコアを取得します
                 data: [
                     scoresData.H, scoresData.E, scoresData.X,
                     scoresData.A, scoresData.C, scoresData.O
@@ -99,7 +138,6 @@
             }
         };
 
-        // canvas要素を取得してグラフを描画します
         const ctx = document.getElementById('hexacoChart').getContext('2d');
         new Chart(ctx, chartConfig);
     </script>

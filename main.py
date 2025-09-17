@@ -12,6 +12,7 @@ import quiz_checker
 import timeline_checker
 import personality_descriptions
 import llm_analyzer
+import type_descriptions # ★ この行が追加されています
 
 # --- アプリケーションの初期設定 ---
 app = FastAPI()
@@ -23,7 +24,22 @@ app.add_middleware(SessionMiddleware, secret_key=secrets.token_hex(32))
 templates = Jinja2Templates(directory="templates")
 
 
-# --- ルート設定 (login, quiz, results, logout, settingsは変更なし) ---
+# --- タイプ分類ロジック ---
+def get_64_type(scores: dict) -> str:
+    """HEXACOの6つのスコアから新しい64タイプ分類の文字列を生成する"""
+    
+    mbti_type = ""
+    mbti_type += "E" if scores.get('X', 0) >= 3.0 else "I"
+    mbti_type += "N" if scores.get('O', 0) >= 3.0 else "S"
+    mbti_type += "F" if scores.get('A', 0) >= 3.0 else "T"
+    mbti_type += "J" if scores.get('C', 0) >= 3.0 else "P"
+    
+    turbulence_assertiveness = "T" if scores.get('E', 0) >= 3.0 else "A"
+    light_dark = "L" if scores.get('H', 0) >= 3.0 else "D"
+    
+    return f"{mbti_type}-{turbulence_assertiveness}{light_dark}"
+
+# --- ルート設定 ---
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
@@ -89,12 +105,8 @@ async def submit_quiz(request: Request):
             {"request": request, "questions": questions, "error": "すべての質問に回答してください。"}
         )
 
-# ★★★ /timeline の処理を全面的に変更 ★★★
 @app.get("/timeline", response_class=HTMLResponse)
 async def show_timeline(request: Request):
-    """
-    パーソナライズされたタイムラインを表示する（キャッシュ利用版）。
-    """
     if 'user_did' not in request.session:
         return RedirectResponse(url="/login", status_code=302)
 
@@ -102,30 +114,26 @@ async def show_timeline(request: Request):
     handle = request.session.get('user_handle')
     app_password = request.session.get('app_password')
 
-    # --- 1. ユーザー情報とフィルター設定を取得 ---
     user_info = {"did": user_did, "handle": handle, "display_name": request.session.get('user_display_name') or handle}
     user_filter_settings = database.get_user_filter_settings(user_did)
     hidden_content = set(user_filter_settings.get('hidden_content_categories', []))
     hidden_expression = set(user_filter_settings.get('hidden_expression_categories', []))
     hidden_style = set(user_filter_settings.get('hidden_style_stance_categories', []))
 
-    # --- 2. Blueskyからタイムラインを取得 ---
     raw_feed = timeline_checker.get_timeline_data(handle, app_password, limit=50) 
     if not raw_feed:
         return templates.TemplateResponse("timeline.html", {"request": request, "user": user_info, "feed": [], "hidden_post_count": 0, "total_post_count": 0})
 
-    # --- 3. キャッシュの確認と、未分析の投稿リスト作成 ---
     all_post_uris = [item.post.uri for item in raw_feed if item.post and item.post.uri]
     cached_results = database.get_cached_analysis_results(all_post_uris)
     
-    posts_to_analyze_map = {} # {uri: text} の形式で未分析の投稿を保持
+    posts_to_analyze_map = {}
     for item in raw_feed:
         post_uri = item.post.uri
         post_text = item.post.record.text.strip() if item.post.record.text else ""
         if post_uri not in cached_results and post_text:
             posts_to_analyze_map[post_uri] = post_text
 
-    # --- 4. 未分析の投稿があれば、まとめてLLMで分析 ---
     newly_analyzed_results = {}
     if posts_to_analyze_map:
         uris_to_analyze = list(posts_to_analyze_map.keys())
@@ -137,16 +145,13 @@ async def show_timeline(request: Request):
             result = llm_results[i]
             if result:
                 newly_analyzed_results[uri] = result
-                database.save_analysis_results(uri, result) # 結果をキャッシュに保存
+                database.save_analysis_results(uri, result)
 
-    # --- 5. 全ての分析結果を統合 ---
     all_analysis_results = {**cached_results, **newly_analyzed_results}
 
-    # --- 6. 投稿を処理し、分析結果をマッピング・モザイクフラグを設定 ---
     processed_feed = []
     hidden_post_count = 0
     for item in raw_feed:
-        # 日付形式を変換
         if isinstance(item.post.indexed_at, str):
             dt_str = item.post.indexed_at.replace('Z', '+00:00')
             item.post.indexed_at = datetime.fromisoformat(dt_str)
@@ -166,7 +171,6 @@ async def show_timeline(request: Request):
             
         processed_feed.append(item)
 
-    # --- 7. テンプレートにデータを渡して表示 ---
     return templates.TemplateResponse("timeline.html", {
         "request": request,
         "user": user_info,
@@ -191,7 +195,23 @@ async def show_results(request: Request):
     if not result:
         return RedirectResponse(url="/quiz", status_code=302)
     scores = {'H': result.get('h', 0), 'E': result.get('e', 0), 'X': result.get('x', 0), 'A': result.get('a', 0), 'C': result.get('c', 0), 'O': result.get('o', 0)}
-    return templates.TemplateResponse("results.html", {"request": request, "scores": scores, "descriptions": personality_descriptions.DESCRIPTIONS})
+    
+    # 64タイプ分類のコードを計算
+    personality_type_64_code = get_64_type(scores)
+    
+    # ★ コードに対応する情報を type_descriptions から取得
+    type_info = type_descriptions.TYPE_DESCRIPTIONS.get(personality_type_64_code, {
+        "title": "測定不能",
+        "type_name": "不明",
+        "description": "タイプを特定できませんでした。"
+    })
+
+    return templates.TemplateResponse("results.html", {
+        "request": request, 
+        "scores": scores, 
+        "descriptions": personality_descriptions.DESCRIPTIONS,
+        "type_info": type_info  # ★ テンプレートに渡す変数を変更
+    })
 
 @app.get("/settings", response_class=HTMLResponse)
 async def show_settings(request: Request):
@@ -230,3 +250,8 @@ async def save_settings(request: Request):
         "all_style_stance_categories": llm_analyzer.STYLE_STANCE_CATEGORIES,
         "save_success": True
     })
+
+# The following code is for deployment and should not be changed.
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
