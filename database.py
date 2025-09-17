@@ -178,7 +178,6 @@ def get_cached_analysis_results(post_uris: list[str]) -> dict[str, dict]:
 
 def save_analysis_results(post_uri: str, analysis_result: dict):
     """単一の分析結果をキャッシュテーブルに保存する"""
-    # この関数は analysis_result が None でないことを前提とする
     if not analysis_result:
         return
 
@@ -186,15 +185,20 @@ def save_analysis_results(post_uri: str, analysis_result: dict):
     cursor = conn.cursor()
     now = datetime.now()
 
+    # .get()のデフォルト値を「N/A」から「不明」に変更し、AIからの意図しない応答に備える
+    content = analysis_result.get('content_category', '不明')
+    expression = analysis_result.get('expression_category', '不明')
+    style = analysis_result.get('style_stance_category', '不明')
+
     cursor.execute('''
         INSERT INTO post_analysis_cache (post_uri, content_category, expression_category, style_stance_category, analyzed_at)
         VALUES (%s, %s, %s, %s, %s)
         ON CONFLICT (post_uri) DO NOTHING
     ''', (
         post_uri,
-        analysis_result.get('content_category', 'N/A'),
-        analysis_result.get('expression_category', 'N/A'),
-        analysis_result.get('style_stance_category', 'N/A'),
+        content,
+        expression,
+        style,
         now
     ))
 
