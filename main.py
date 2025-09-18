@@ -51,7 +51,8 @@ async def login_process(request: Request, handle: str = Form(...), app_password:
     if user_profile:
         request.session['user_did'] = user_profile['did']
         request.session['handle'] = user_profile['handle']
-        request.session['display_name'] = user_profile['display_name']
+        # ▼▼▼【修正】表示名がない場合はハンドル名を使用する ▼▼▼
+        request.session['display_name'] = user_profile.get('display_name') or user_profile.get('handle')
         request.session['app_password'] = app_password
         
         has_result = database.get_user_result(user_profile['did'])
