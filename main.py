@@ -176,9 +176,10 @@ async def show_results(request: Request):
     if not result: return RedirectResponse(url="/quiz")
     
     scores = { 'H': result.get('h',0), 'E': result.get('e',0), 'X': result.get('x',0), 'A': result.get('a',0), 'C': result.get('c',0), 'O': result.get('o',0) }
-    type_info = type_descriptions.TYPE_DESCRIPTIONS.get(get_64_type(scores), {"title": "測定不能", "type_name": "不明", "description": "タイプを特定できませんでした。"})
+    type_code = get_64_type(scores)
+    type_info = type_descriptions.TYPE_DESCRIPTIONS.get(type_code, {"title": "測定不能", "type_name": "不明", "description": "タイプを特定できませんでした。"})
     
-    return templates.TemplateResponse("results.html", {"request": request, "scores": scores, "descriptions": personality_descriptions.DESCRIPTIONS, "type_info": type_info})
+    return templates.TemplateResponse("results.html", {"request": request, "scores": scores, "descriptions": personality_descriptions.DESCRIPTIONS, "type_info": type_info, "type_code": type_code})
 
 @app.get("/settings", response_class=HTMLResponse)
 async def show_settings(request: Request):
