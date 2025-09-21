@@ -21,16 +21,16 @@ CONTENT_CATEGORIES = {
 }
 
 EXPRESSION_CATEGORIES = [
-    "肯定的", "中立・客観的", "懸念・不安", "悲しみ・失望", 
+    "肯定的", "中立・客観的", "懸念・不安", "悲しみ・失望",
     "怒り・不満", "攻撃的", "ショッキング"
 ]
 
 STYLE_STANCE_CATEGORIES = [
     "自慢・成功誇示", "感謝・ポジティブな感想", "ユーモア・ジョーク",
     "批判・反論", "愚痴・不平不満", "皮肉・冷笑", "過度な自虐",
-    "強い意見・主張", "教訓・アドバイス", "客観的な報告・告知", 
+    "強い意見・主張", "教訓・アドバイス", "客観的な報告・告知",
     "専門的な解説", "不正確・誤情報", "根拠のない陰謀論",
-    "扇情的な見出し（釣りタイトル）", "誇張・大げさな表現", "丁寧・謙虚", 
+    "扇情的な見出し（釣りタイトル）", "誇張・大げさな表現", "丁寧・謙虚",
     "当たり障りのない意見", "内省的・思索的", "感情的な共感を求める",
     "その他"
 ]
@@ -39,21 +39,25 @@ flat_content_categories = [item for sublist in CONTENT_CATEGORIES.values() for i
 
 def analyze_posts_batch(texts: list[str]):
     error_result = {
-        "content_category": "分析失敗", "expression_category": "分析失敗", 
+        "content_category": "分析失敗", "expression_category": "分析失敗",
         "style_stance_category": "分析失敗", "embedding": None
     }
     if not API_KEY:
         print("エラー: GEMINI_API_KEYが設定されていません。")
         return [error_result] * len(texts)
-        
+
     try:
         embeddings = embedding_model.encode(texts).tolist()
     except Exception as e:
         print(f"テキストのベクトル化中にエラーが発生しました: {e}")
         embeddings = [None] * len(texts)
 
+    # テキストが空のリストの場合は、空のリストを返す
+    if not texts:
+        return []
+
     formatted_texts = "\n".join(f"投稿{i+1}:\n---\n{text}\n---" for i, text in enumerate(texts))
-    
+
     # ▼▼▼【変更】AIへの指示をより厳密に修正 ▼▼▼
     prompt = f"""
     以下のSNS投稿リスト（{len(texts)}件）を分析し、3つの軸で最も適切なカテゴリを1つずつ選択してください。
@@ -69,11 +73,12 @@ def analyze_posts_batch(texts: list[str]):
     - "expression_category": {EXPRESSION_CATEGORIES}
     - "style_stance_category": {STYLE_STANCE_CATEGORIES}
 
-    # 制約:
-    - 必ず投稿{len(texts)}件分、{len(texts)}個のJSONオブジェクトをリストに入れて返してください。
+    # 制約（絶対に守ってください）:
+    - 必ず投稿{len(texts)}件分、つまり{len(texts)}個のJSONオブジェクトをリストに入れて返してください。
     - 分析が困難な場合でも、カテゴリを「不明」として必ずオブジェクトを作成してください。
     - 回答はJSONリストのみとし、説明文は一切含めないでください。
     - 各JSONオブジェクトには3つのキー（content_category, expression_category, style_stance_category）を必ず含めてください。
+    - **最終出力の前に、生成したJSONオブジェクトの数が{len(texts)}個であることを必ず確認してください。数が違う場合は、リストを修正して{len(texts)}個にしてください。**
 
     # 投稿リスト:
     {formatted_texts}
@@ -86,25 +91,41 @@ def analyze_posts_batch(texts: list[str]):
     """
     try:
         response = model.generate_content(prompt)
-        match = re.search(r'\[.*\]', response.text, re.DOTALL)
+        # 応答テキストからJSON部分のみを抽出する正規表現を改善
+        match = re.search(r'```json\s*(\[.*\])\s*```|(\[.*\])', response.text, re.DOTALL)
         if not match:
             print("エラー: LLM応答からJSONリストが見つかりません。")
+            print(f"--- LLMからの応答 ---\n{response.text}\n--------------------")
             return [error_result] * len(texts)
-        
-        json_text = match.group(0)
+
+        # マッチしたグループのいずれかからJSONテキストを取得
+        json_text = match.group(1) or match.group(2)
         analysis_results_json = json.loads(json_text)
-        
+
         if isinstance(analysis_results_json, list) and len(analysis_results_json) == len(texts):
             full_results = []
             for i, result in enumerate(analysis_results_json):
-                result['embedding'] = embeddings[i]
-                full_results.append(result)
+                # 念の為、結果に必要なキーが含まれているか確認
+                final_result = {
+                    "content_category": result.get("content_category", "不明"),
+                    "expression_category": result.get("expression_category", "不明"),
+                    "style_stance_category": result.get("style_stance_category", "不明"),
+                    "embedding": embeddings[i]
+                }
+                full_results.append(final_result)
             return full_results
         else:
             print(f"エラー: LLMからの結果件数が一致しません。(期待: {len(texts)}, 実際: {len(analysis_results_json)})")
+            print(f"--- LLMからの応答 ---\n{response.text}\n--------------------")
             return [error_result] * len(texts)
 
-    except (json.JSONDecodeError, Exception) as e:
-        print(f"LLMでの分析中にエラーが発生しました: {e}")
+    except json.JSONDecodeError as e:
+        print(f"JSONの解析に失敗しました: {e}")
         print(f"--- LLMからの応答 ---\n{response.text}\n--------------------")
+        return [error_result] * len(texts)
+    except Exception as e:
+        print(f"LLMでの分析中に予期せぬエラーが発生しました: {e}")
+        # response変数が初期化されているか確認
+        if 'response' in locals() and hasattr(response, 'text'):
+            print(f"--- LLMからの応答 ---\n{response.text}\n--------------------")
         return [error_result] * len(texts)
