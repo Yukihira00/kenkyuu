@@ -13,6 +13,9 @@
         button { width: 100%; padding: 10px; border: none; background-color: #007bff; color: white; border-radius: 4px; font-size: 16px; cursor: pointer; }
         button:hover { background-color: #0056b3; }
         .error { color: red; text-align: center; margin-top: 10px; }
+        .info-link { text-align: right; font-size: 0.9em; margin-top: -10px; margin-bottom: 15px; }
+        .info-link a { color: #007bff; text-decoration: none; }
+        .info-link a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
@@ -25,6 +28,9 @@
         <div class="form-group">
             <label for="app_password">アプリパスワード</label>
             <input type="password" id="app_password" name="app_password" required>
+        </div>
+        <div class="info-link">
+            <a href="/app_password_info" target="_blank">アプリパスワードとは？</a>
         </div>
         <button type="submit">ログイン</button>
         {% if error %}

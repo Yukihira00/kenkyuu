@@ -45,13 +45,17 @@ async def root(request: Request):
 async def login_form(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
 
+# ▼▼▼【追加】アプリパスワード説明ページ用のルートを追加 ▼▼▼
+@app.get("/app_password_info", response_class=HTMLResponse)
+async def app_password_info(request: Request):
+    return templates.TemplateResponse("app_password_info.html", {"request": request})
+
 @app.post("/login")
 async def login_process(request: Request, handle: str = Form(...), app_password: str = Form(...)):
     user_profile = timeline_checker.verify_login_and_get_profile(handle, app_password)
     if user_profile:
         request.session['user_did'] = user_profile['did']
         request.session['handle'] = user_profile['handle']
-        # ▼▼▼【修正】表示名がない場合はハンドル名を使用する ▼▼▼
         request.session['display_name'] = user_profile.get('display_name') or user_profile.get('handle')
         request.session['app_password'] = app_password
         
@@ -87,9 +91,6 @@ async def show_timeline(request: Request):
     user_scores = database.get_user_result(user_did)
     hidden_content_manual = set(user_filter_settings.get('hidden_content_categories', []))
     unpleasant_uris = set(database.get_unpleasant_feedback_uris(user_did))
-    
-    # ▼▼▼【削除】不要になった変数を削除 ▼▼▼
-    # learned_unpleasant_categories = ...
     
     unpleasant_vectors = database.get_unpleasant_post_vectors(user_did)
     SIMILARITY_THRESHOLD = 0.75
@@ -135,7 +136,6 @@ async def show_timeline(request: Request):
                         is_similar = True
                         break
             
-            # ▼▼▼【修正】フィルタリングロジックを簡素化 ▼▼▼
             if user_filter_settings.get('similarity_filter_enabled') and is_similar:
                 item.is_mosaic = True
                 item.analysis_info = {"type": "類似フィルター", "category": "あなたが不快と報告した投稿に類似"}
@@ -206,10 +206,6 @@ async def save_settings(request: Request):
     auto_filter_enabled = form_data.get("auto_filter_switch") == "on"
     similarity_filter_enabled = form_data.get("similarity_filter_switch") == "on"
     
-    # ▼▼▼【修正】不要な変数を削除 ▼▼▼
-    # learning_filter_enabled = ...
-
-    # ▼▼▼【修正】関数呼び出しを修正 ▼▼▼
     database.save_user_filter_settings(
         request.session['user_did'], 
         hidden_content, 
