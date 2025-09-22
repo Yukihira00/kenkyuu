@@ -59,13 +59,14 @@ def initialize_database():
         FOREIGN KEY (user_did) REFERENCES users (user_did)
     )''')
     
-    # ▼▼▼【修正】不要な列を削除 ▼▼▼
+    # ▼▼▼【修正】filter_strength列を追加 ▼▼▼
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS filter_settings (
         setting_id SERIAL PRIMARY KEY, user_did TEXT NOT NULL UNIQUE,
         hidden_content_categories TEXT[] NOT NULL,
         auto_filter_enabled BOOLEAN NOT NULL DEFAULT TRUE,
         similarity_filter_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        filter_strength INTEGER NOT NULL DEFAULT 2, -- 1:弱, 2:標準, 3:強
         updated_at TIMESTAMPTZ NOT NULL,
         FOREIGN KEY (user_did) REFERENCES users (user_did)
     )''')
@@ -85,6 +86,19 @@ def initialize_database():
         FOREIGN KEY (user_did) REFERENCES users (user_did),
         FOREIGN KEY (post_uri) REFERENCES post_analysis_cache (post_uri)
     )''')
+
+    # ▼▼▼【追加】フィルターへのフィードバックを保存するテーブルを追加 ▼▼▼
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS filter_feedback (
+        feedback_id SERIAL PRIMARY KEY,
+        user_did TEXT NOT NULL,
+        post_uri TEXT NOT NULL,
+        filter_type TEXT NOT NULL, -- 'personality', 'similarity', 'manual'など
+        feedback TEXT NOT NULL, -- 'correct', 'incorrect'
+        created_at TIMESTAMPTZ NOT NULL,
+        FOREIGN KEY (user_did) REFERENCES users (user_did)
+    )''')
+
 
     conn.commit()
     cursor.close()
@@ -112,10 +126,6 @@ def get_unpleasant_feedback_uris(user_did: str) -> list[str]:
     cursor.close()
     conn.close()
     return [result['post_uri'] for result in results]
-
-# ▼▼▼【削除】この関数を削除 ▼▼▼
-# def get_learned_unpleasant_categories(user_did: str, threshold: int = 2) -> set[str]:
-#     ...
 
 def get_unpleasant_post_vectors(user_did: str) -> list[np.ndarray]:
     """指定されたユーザーが不快報告した投稿のベクトルリストを取得する"""
@@ -155,28 +165,29 @@ def get_user_result(user_did: str):
 def get_user_filter_settings(user_did: str):
     conn = get_connection()
     cursor = conn.cursor()
-    # ▼▼▼【修正】不要な列を削除 ▼▼▼
-    cursor.execute("SELECT hidden_content_categories, auto_filter_enabled, similarity_filter_enabled FROM filter_settings WHERE user_did = %s", (user_did,))
+    # ▼▼▼【修正】filter_strength列を取得するように修正 ▼▼▼
+    cursor.execute("SELECT hidden_content_categories, auto_filter_enabled, similarity_filter_enabled, filter_strength FROM filter_settings WHERE user_did = %s", (user_did,))
     settings = cursor.fetchone()
     cursor.close()
     conn.close()
     if settings: return settings
-    # ▼▼▼【修正】デフォルト値から不要な項目を削除 ▼▼▼
-    else: return {'hidden_content_categories': [], 'auto_filter_enabled': True, 'similarity_filter_enabled': True}
+    # ▼▼▼【修正】デフォルト値にfilter_strengthを追加 ▼▼▼
+    else: return {'hidden_content_categories': [], 'auto_filter_enabled': True, 'similarity_filter_enabled': True, 'filter_strength': 2}
 
 # ▼▼▼【修正】関数シグネチャとSQL文を修正 ▼▼▼
-def save_user_filter_settings(user_did: str, content: list[str], auto_filter: bool, similarity_filter: bool):
+def save_user_filter_settings(user_did: str, content: list[str], auto_filter: bool, similarity_filter: bool, filter_strength: int):
     conn = get_connection()
     cursor = conn.cursor()
     now = datetime.now()
     cursor.execute('''
-        INSERT INTO filter_settings (user_did, hidden_content_categories, auto_filter_enabled, similarity_filter_enabled, updated_at) VALUES (%s, %s, %s, %s, %s)
+        INSERT INTO filter_settings (user_did, hidden_content_categories, auto_filter_enabled, similarity_filter_enabled, filter_strength, updated_at) VALUES (%s, %s, %s, %s, %s, %s)
         ON CONFLICT (user_did) DO UPDATE SET
             hidden_content_categories = EXCLUDED.hidden_content_categories, 
             auto_filter_enabled = EXCLUDED.auto_filter_enabled, 
-            similarity_filter_enabled = EXCLUDED.similarity_filter_enabled, 
+            similarity_filter_enabled = EXCLUDED.similarity_filter_enabled,
+            filter_strength = EXCLUDED.filter_strength,
             updated_at = EXCLUDED.updated_at
-    ''', (user_did, content, auto_filter, similarity_filter, now))
+    ''', (user_did, content, auto_filter, similarity_filter, filter_strength, now))
     conn.commit()
     cursor.close()
     conn.close()
@@ -210,6 +221,21 @@ def save_analysis_results(post_uri: str, analysis_result: dict):
     conn.commit()
     cursor.close()
     conn.close()
+
+# ▼▼▼【追加】フィードバックを保存する関数を追加 ▼▼▼
+def add_filter_feedback(user_did: str, post_uri: str, filter_type: str, feedback: str):
+    """ユーザーからのフィルターフィードバックをデータベースに保存する"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    now = datetime.now()
+    cursor.execute(
+        'INSERT INTO filter_feedback (user_did, post_uri, filter_type, feedback, created_at) VALUES (%s, %s, %s, %s, %s)',
+        (user_did, post_uri, filter_type, feedback, now)
+    )
+    conn.commit()
+    cursor.close()
+    conn.close()
+
 
 if __name__ == '__main__':
     initialize_database()

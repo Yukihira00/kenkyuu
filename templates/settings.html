@@ -27,7 +27,7 @@
         .success-message { text-align: center; color: #27ae60; font-weight: 500; margin-top: 1rem; background-color: #e9f7ef; padding: 0.8rem; border-radius: 5px; border: 1px solid #a7d7c5; display: none; }
         
         /* トグルスイッチ */
-        .switch-container { display: flex; align-items: center; justify-content: space-between; padding: 1rem; background: #f8f9fa; border-radius: 8px; }
+        .switch-container { display: flex; align-items: center; justify-content: space-between; padding: 1rem; background: #f8f9fa; border-radius: 8px; margin-bottom: 1rem;}
         .switch-label { font-size: 1.1em; font-weight: 500; }
         .switch { position: relative; display: inline-block; width: 60px; height: 34px; }
         .switch input { opacity: 0; width: 0; height: 0; }
@@ -35,6 +35,13 @@
         .slider:before { position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
         input:checked + .slider { background-color: #28a745; }
         input:checked + .slider:before { transform: translateX(26px); }
+
+        /* ▼▼▼【追加】強度設定のスタイルを追加 ▼▼▼ */
+        .strength-selector { padding: 1rem; background: #f8f9fa; border-radius: 8px; }
+        .strength-selector .strength-label { font-size: 1.1em; font-weight: 500; margin-bottom: 1rem; display: block; }
+        .strength-options { display: flex; justify-content: space-around; }
+        .strength-options label { cursor: pointer; }
+        .strength-options input { margin-right: 0.5rem; }
 
         /* 自動フィルタリングルールの表示 */
         .rules-display { margin-top: 1.5rem; padding: 1.5rem; background-color: #f8f9fa; border-radius: 8px; }
@@ -62,8 +69,18 @@
                         <span class="slider"></span>
                     </label>
                 </div>
+                
+                <div class="strength-selector">
+                    <span class="strength-label">フィルタリングの強度</span>
+                    <div class="strength-options">
+                        <label><input type="radio" name="filter_strength" value="1" {% if user_settings.filter_strength == 1 %}checked{% endif %}> 弱め</label>
+                        <label><input type="radio" name="filter_strength" value="2" {% if user_settings.filter_strength == 2 %}checked{% endif %}> 標準</label>
+                        <label><input type="radio" name="filter_strength" value="3" {% if user_settings.filter_strength == 3 %}checked{% endif %}> 強め</label>
+                    </div>
+                </div>
+
                 <p style="font-size: 0.9em; color: #666; margin-top: 1rem;">
-                    この設定をオンにすると、あなたのHEXACO診断結果に基づいて、不快に感じる可能性のある投稿が自動的にモザイク表示されます。
+                    この設定をオンにすると、あなたのHEXACO診断結果に基づいて、不快に感じる可能性のある投稿が自動的にモザイク表示されます。強度は3段階で調整できます。
                 </p>
 
                 {% if user_settings.auto_filter_enabled and active_rules %}

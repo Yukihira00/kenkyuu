@@ -45,7 +45,6 @@ async def root(request: Request):
 async def login_form(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
 
-# ▼▼▼【追加】アプリパスワード説明ページ用のルートを追加 ▼▼▼
 @app.get("/app_password_info", response_class=HTMLResponse)
 async def app_password_info(request: Request):
     return templates.TemplateResponse("app_password_info.html", {"request": request})
@@ -93,7 +92,11 @@ async def show_timeline(request: Request):
     unpleasant_uris = set(database.get_unpleasant_feedback_uris(user_did))
     
     unpleasant_vectors = database.get_unpleasant_post_vectors(user_did)
-    SIMILARITY_THRESHOLD = 0.75
+    
+    # ▼▼▼【修正】フィルタリング強度に応じて類似度の閾値を変更 ▼▼▼
+    strength = user_filter_settings.get('filter_strength', 2)
+    SIMILARITY_THRESHOLDS = {1: 0.85, 2: 0.75, 3: 0.65}
+    SIMILARITY_THRESHOLD = SIMILARITY_THRESHOLDS.get(strength, 0.75)
 
     raw_feed = timeline_checker.get_timeline_data(request.session['handle'], request.session['app_password'], limit=50)
     if not raw_feed:
@@ -147,6 +150,9 @@ async def show_timeline(request: Request):
                     level = 'high' if user_scores.get(trait.lower(), 0) >= 3.0 else 'low'
                     rule = rules[level]
                     
+                    # ▼▼▼【修正】フィルタリング強度に応じたルールを適用 ▼▼▼
+                    categories_to_hide = rule['categories'].get(strength, [])
+                    
                     category_key = ""
                     if rule['type'] == 'style':
                         category_key = 'style_stance_category'
@@ -155,7 +161,7 @@ async def show_timeline(request: Request):
 
                     if category_key:
                         post_category = analysis_result.get(category_key)
-                        if post_category in rule['categories']:
+                        if post_category in categories_to_hide:
                             item.is_mosaic = True
                             item.analysis_info = {"type": "性格診断フィルター", "category": post_category}
                             break
@@ -191,9 +197,10 @@ async def show_settings(request: Request):
     user_scores = database.get_user_result(user_did)
     active_rules = {}
     if user_scores:
+        strength = user_settings.get('filter_strength', 2)
         for trait, rules in personality_descriptions.FILTERING_RULES.items():
             level = 'high' if user_scores[trait.lower()] >= 3.0 else 'low'
-            active_rules[rules['name']] = rules[level]['categories']
+            active_rules[rules['name']] = rules[level]['categories'].get(strength, [])
     
     return templates.TemplateResponse("settings.html", {"request": request, "user_settings": user_settings, "all_content_categories": llm_analyzer.CONTENT_CATEGORIES, "active_rules": active_rules})
 
@@ -205,12 +212,16 @@ async def save_settings(request: Request):
     hidden_content = form_data.getlist("hidden_content")
     auto_filter_enabled = form_data.get("auto_filter_switch") == "on"
     similarity_filter_enabled = form_data.get("similarity_filter_switch") == "on"
+    # ▼▼▼【追加】フォームから強度設定を受け取る ▼▼▼
+    filter_strength = int(form_data.get("filter_strength", 2))
     
+    # ▼▼▼【修正】データベース保存処理に強度設定を渡す ▼▼▼
     database.save_user_filter_settings(
         request.session['user_did'], 
         hidden_content, 
         auto_filter_enabled, 
-        similarity_filter_enabled
+        similarity_filter_enabled,
+        filter_strength
     )
     
     # データを再取得してテンプレートに渡す
@@ -218,9 +229,10 @@ async def save_settings(request: Request):
     user_scores = database.get_user_result(request.session['user_did'])
     active_rules = {}
     if user_scores:
+        strength = user_settings.get('filter_strength', 2)
         for trait, rules in personality_descriptions.FILTERING_RULES.items():
             level = 'high' if user_scores.get(trait.lower(), 0) >= 3.0 else 'low'
-            active_rules[rules['name']] = rules[level]['categories']
+            active_rules[rules['name']] = rules[level]['categories'].get(strength, [])
             
     return templates.TemplateResponse("settings.html", {
         "request": request,
@@ -232,6 +244,25 @@ async def save_settings(request: Request):
 
 class ReportPayload(BaseModel):
     uri: str
+
+# ▼▼▼【追加】フィルターへのフィードバックを受け取るためのAPIエンドポイント ▼▼▼
+class FeedbackPayload(BaseModel):
+    uri: str
+    filter_type: str
+    feedback: str
+
+@app.post("/report_filter_feedback")
+async def report_filter_feedback(request: Request, payload: FeedbackPayload):
+    if 'user_did' not in request.session:
+        return JSONResponse(content={"success": False, "error": "Not logged in"}, status_code=401)
+    
+    database.add_filter_feedback(
+        user_did=request.session['user_did'],
+        post_uri=payload.uri,
+        filter_type=payload.filter_type,
+        feedback=payload.feedback
+    )
+    return JSONResponse(content={"success": True})
 
 @app.post("/report_unpleasant")
 async def report_unpleasant(request: Request, payload: ReportPayload):

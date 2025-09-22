@@ -46,6 +46,24 @@
     .reveal-button:hover { background-color: #0056b3; }
     .analysis-info { color: #333; background-color: rgba(255,255,255,0.8); padding: 8px 12px; border-radius: 8px; font-size: 0.9em; text-align: center; max-width: 80%; border: 1px solid rgba(0,0,0,0.1); }
     .analysis-info-title { display: block; font-weight: bold; color: #0056b3; margin-bottom: 4px; }
+    
+    /* ▼▼▼【修正】フィードバック関連のスタイルを修正 ▼▼▼ */
+    .feedback-section-after-reveal {
+        margin-top: 15px;
+        padding: 15px;
+        border-top: 1px solid #e4e6eb;
+        text-align: center;
+        background-color: #f8f9fa;
+    }
+    .feedback-question { font-size: 0.9em; color: #333; margin-bottom: 8px; }
+    .feedback-buttons { display: flex; gap: 10px; justify-content: center; }
+    .feedback-btn { background: none; border: 1px solid #ccc; padding: 5px 12px; border-radius: 15px; cursor: pointer; font-size: 0.85em; transition: background-color 0.2s, border-color 0.2s, color 0.2s; }
+    .feedback-btn.correct { border-color: #28a745; color: #28a745; }
+    .feedback-btn.correct:hover { background-color: #28a745; color: white; }
+    .feedback-btn.incorrect { border-color: #ffc107; color: #ffc107; }
+    .feedback-btn.incorrect:hover { background-color: #ffc107; color: white; }
+    .feedback-thanks { font-size: 0.9em; color: #28a745; font-weight: bold; display: none; }
+
     .post-menu { position: relative; }
     .post-menu-btn { background: none; border: none; font-size: 1.5em; cursor: pointer; color: #65676b; padding: 0 5px; }
     .analysis-popup { display: none; position: absolute; top: 30px; right: 0; background: white; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); padding: 10px; width: 220px; z-index: 100; }
@@ -86,7 +104,12 @@
                     {% if item.is_mosaic %}
                     <div class="reveal-overlay">
                         <button class="reveal-button">モザイクを解除して表示する</button>
-                        {% if item.analysis_info %}<div class="analysis-info"><span class="analysis-info-title">非表示理由 ({{ item.analysis_info.type }})</span>{{ item.analysis_info.category }}</div>{% endif %}
+                        {% if item.analysis_info %}
+                        <div class="analysis-info">
+                            <span class="analysis-info-title">非表示理由 ({{ item.analysis_info.type }})</span>
+                            {{ item.analysis_info.category }}
+                        </div>
+                        {% endif %}
                     </div>
                     {% endif %}
                     <div class="post {% if item.is_mosaic %}post-content-hidden{% endif %}">
@@ -103,7 +126,21 @@
                         <div class="post-content">{{ item.post.record.text }}</div>
                         {% if item.post.embed and item.post.embed.py_type == 'app.bsky.embed.images#view' %}<div class="post-images">{% for image in item.post.embed.images %}<a href="{{ image.fullsize }}" target="_blank"><img src="{{ image.thumb }}" alt="投稿画像"></a>{% endfor %}</div>{% endif %}
                         <div class="post-footer">投稿日時: {{ item.post.indexed_at.strftime('%Y-%m-%d %H:%M') }}</div>
-                    </div></div>
+
+                        {% if item.is_mosaic and item.analysis_info.type != "不快な投稿" %}
+                        <div class="feedback-section-after-reveal" style="display: none;" 
+                             data-uri="{{ item.post.uri }}" 
+                             data-filter-type="{{ item.analysis_info.type }}">
+                            <p class="feedback-question">この投稿の非表示は適切でしたか？</p>
+                            <div class="feedback-buttons">
+                                <button class="feedback-btn correct" data-feedback="correct">はい、適切でした</button>
+                                <button class="feedback-btn incorrect" data-feedback="incorrect">いいえ、表示して良い</button>
+                            </div>
+                            <p class="feedback-thanks">フィードバックありがとうございます！</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
             {% endfor %}
         {% else %}
             <div class="post"><p>タイムラインの読み込みに失敗したか、表示できる投稿がありません。</p></div>
@@ -116,17 +153,27 @@
             const navLinks = document.getElementById('nav-links');
             menuBtn.addEventListener('click', () => navLinks.classList.toggle('open'));
 
+            // ▼▼▼【修正】モザイク解除時の処理を修正 ▼▼▼
             document.querySelectorAll('.reveal-button').forEach(button => {
                 button.addEventListener('click', function() {
+                    const container = this.closest('.post-mosaic-container');
                     const overlay = this.closest('.reveal-overlay');
-                    const postContent = overlay.closest('.post-mosaic-container').querySelector('.post-content-hidden');
+                    const postContent = container.querySelector('.post-content-hidden');
+                    
                     if (overlay && postContent) {
                         overlay.classList.add('hidden');
                         postContent.classList.add('revealed');
+                        
+                        // モザイク解除後にフィードバックセクションを表示する
+                        const feedbackSection = container.querySelector('.feedback-section-after-reveal');
+                        if (feedbackSection) {
+                            feedbackSection.style.display = 'block';
+                        }
                     }
                 });
             });
 
+            // (他のJavaScript部分は変更なし)
             const postMenuBtns = document.querySelectorAll('.post-menu-btn');
             postMenuBtns.forEach(btn => {
                 btn.addEventListener('click', (event) => {
@@ -144,7 +191,6 @@
                 });
             });
             
-            // ▼▼▼【変更】不快ボタンの処理を修正 ▼▼▼
             document.querySelectorAll('.unpleasant-btn').forEach(button => {
                 button.addEventListener('click', function(event) {
                     event.stopPropagation();
@@ -161,12 +207,9 @@
                         if(data.success) {
                             alert('フィードバックを送信しました。この投稿は非表示になります。');
                             
-                            // 即座にモザイクをかける
                             if(postContainer) {
-                                // 既にオーバーレイがあるか確認
                                 let overlay = postContainer.querySelector('.reveal-overlay');
                                 if (!overlay) {
-                                    // オーバーレイがなければ新しく作成
                                     overlay = document.createElement('div');
                                     overlay.className = 'reveal-overlay';
                                     overlay.innerHTML = `
@@ -178,20 +221,50 @@
                                     `;
                                     postContainer.prepend(overlay);
                                     
-                                    // 作成した解除ボタンにイベントリスナーを再度設定
                                     overlay.querySelector('.reveal-button').addEventListener('click', function() {
                                         overlay.classList.add('hidden');
                                         postContainer.querySelector('.post').classList.remove('post-content-hidden');
+                                        
+                                        // 新しく作ったオーバーレイにもフィードバック表示機能を追加
+                                        const feedbackSection = postContainer.querySelector('.feedback-section-after-reveal');
+                                        if (feedbackSection) {
+                                            feedbackSection.style.display = 'block';
+                                        }
                                     });
                                 }
                                 postContainer.querySelector('.post').classList.add('post-content-hidden');
                             }
                             
-                            // ポップアップを閉じる
                             const popup = this.closest('.analysis-popup');
                             if (popup) popup.classList.remove('show');
                         } else {
                             alert('報告に失敗しました。');
+                        }
+                    });
+                });
+            });
+
+            // ▼▼▼【修正】フィードバック送信処理のセレクタを修正 ▼▼▼
+            document.querySelectorAll('.feedback-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const feedbackSection = this.closest('.feedback-section-after-reveal');
+                    const uri = feedbackSection.dataset.uri;
+                    const filter_type = feedbackSection.dataset.filterType;
+                    const feedback = this.dataset.feedback;
+
+                    fetch('/report_filter_feedback', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ uri, filter_type, feedback })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            feedbackSection.querySelector('.feedback-question').style.display = 'none';
+                            feedbackSection.querySelector('.feedback-buttons').style.display = 'none';
+                            feedbackSection.querySelector('.feedback-thanks').style.display = 'block';
+                        } else {
+                            alert('フィードバックの送信に失敗しました。');
                         }
                     });
                 });
