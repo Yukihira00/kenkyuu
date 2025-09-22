@@ -3,39 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <title>ログイン</title>
-    <style>
-        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #f0f2f5; }
-        form { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-        h1 { text-align: center; color: #333; }
-        .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 5px; color: #555; }
-        input { width: 300px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
-        button { width: 100%; padding: 10px; border: none; background-color: #007bff; color: white; border-radius: 4px; font-size: 16px; cursor: pointer; }
-        button:hover { background-color: #0056b3; }
-        .error { color: red; text-align: center; margin-top: 10px; }
-        .info-link { text-align: right; font-size: 0.9em; margin-top: -10px; margin-bottom: 15px; }
-        .info-link a { color: #007bff; text-decoration: none; }
-        .info-link a:hover { text-decoration: underline; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <form action="/login" method="post">
-        <h1>Bluesky ログイン</h1>
-        <div class="form-group">
-            <label for="handle">ハンドル (例: yourname.bsky.social)</label>
-            <input type="text" id="handle" name="handle" required>
+    <div class="container">
+        <div class="card">
+            <h1>Bluesky ログイン</h1>
+            <p style="text-align: center; color: var(--text-color-light);">あなたの性格に合わせたタイムラインを体験しませんか？</p>
+            <form action="/login" method="post">
+                <div class="form-group">
+                    <label for="handle">ハンドル (例: yourname.bsky.social)</label>
+                    <input type="text" id="handle" name="handle" required>
+                </div>
+                <div class="form-group">
+                    <label for="app_password">アプリパスワード</label>
+                    <input type="password" id="app_password" name="app_password" required>
+                </div>
+                <div class="info-link">
+                    <a href="/app_password_info" target="_blank">アプリパスワードとは？</a>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">ログイン</button>
+                {% if error %}
+                    <p class="error-message">{{ error }}</p>
+                {% endif %}
+            </form>
         </div>
-        <div class="form-group">
-            <label for="app_password">アプリパスワード</label>
-            <input type="password" id="app_password" name="app_password" required>
-        </div>
-        <div class="info-link">
-            <a href="/app_password_info" target="_blank">アプリパスワードとは？</a>
-        </div>
-        <button type="submit">ログイン</button>
-        {% if error %}
-            <p class="error">{{ error }}</p>
-        {% endif %}
-    </form>
+    </div>
 </body>
 </html>

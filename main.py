@@ -2,6 +2,7 @@
 from datetime import datetime
 import secrets
 from fastapi import FastAPI, Request, Form
+from fastapi.staticfiles import StaticFiles # ◀◀◀【追加】
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -18,6 +19,10 @@ import type_descriptions
 
 # --- アプリケーションの初期設定 ---
 app = FastAPI()
+
+# ▼▼▼【追加】staticディレクトリのマウント ▼▼▼
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 app.add_middleware(SessionMiddleware, secret_key=secrets.token_hex(32))
 templates = Jinja2Templates(directory="templates")
 

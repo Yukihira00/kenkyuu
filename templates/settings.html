@@ -3,150 +3,136 @@
 <head>
     <meta charset="UTF-8">
     <title>フィルター設定</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Noto Sans JP', sans-serif; background-color: #f7f9fc; color: #333; margin: 0; padding: 2rem; }
-        .container { max-width: 900px; margin: 0 auto; background: white; padding: 2.5rem; border-radius: 12px; box-shadow: 0 8px 25px rgba(0,0,0,0.08); }
-        h1 { text-align: center; color: #333; }
-        .settings-form { margin-top: 2.5rem; }
-        .axis-group { margin-bottom: 3rem; border-top: 1px solid #e9ecef; padding-top: 2rem; }
-        .axis-group > h2 { font-size: 1.6em; color: #007bff; padding-bottom: 0.5rem; margin-top: 0; margin-bottom: 1.5rem; display: flex; align-items: center;}
+        /* settings.html固有のスタイル */
+        .axis-group { margin-bottom: 3rem; border-top: 1px solid var(--border-color); padding-top: 2rem; }
+        .axis-group > h2 { font-size: 1.6em; color: var(--primary-color); padding-bottom: 0.5rem; margin-top: 0; margin-bottom: 1.5rem; display: flex; align-items: center; border: none;}
         .category-group { margin-bottom: 1.5rem; }
-        .category-group h3 { font-size: 1.2em; color: #333; margin-bottom: 1rem; padding-left: 0.5rem; border-left: 4px solid #007bff; }
+        .category-group h3 { font-size: 1.2em; color: var(--text-color); margin-bottom: 1rem; padding-left: 0.5rem; border-left: 4px solid var(--primary-color); }
         .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.8rem; padding-left: 1rem; }
-        
         .checkbox-label { display: flex; align-items: center; cursor: pointer; padding: 2px; }
         .checkbox-label input { margin-right: 0.7rem; }
-
-        .button-container { text-align: center; margin-top: 2.5rem; }
-        .button { background-color: #007bff; color: white; padding: 0.8rem 2.5rem; border-radius: 5px; border: none; font-size: 1.1em; cursor: pointer; transition: background-color 0.2s; font-weight: 500;}
-        .button:hover { background-color: #0056b3; }
-        .nav-link { display: block; text-align: center; margin-top: 1rem; color: #007bff; text-decoration: none; }
-        .nav-link:hover { text-decoration: underline; }
-
-        .success-message { text-align: center; color: #27ae60; font-weight: 500; margin-top: 1rem; background-color: #e9f7ef; padding: 0.8rem; border-radius: 5px; border: 1px solid #a7d7c5; display: none; }
-        
-        /* トグルスイッチ */
-        .switch-container { display: flex; align-items: center; justify-content: space-between; padding: 1rem; background: #f8f9fa; border-radius: 8px; margin-bottom: 1rem;}
+        .success-message { text-align: center; color: #27ae60; font-weight: 500; margin-top: 1rem; background-color: #e9f7ef; padding: 0.8rem; border-radius: 5px; border: 1px solid #a7d7c5; }
+        .switch-container { display: flex; align-items: center; justify-content: space-between; padding: 1rem; background: var(--background-color); border-radius: 8px; margin-bottom: 1rem;}
         .switch-label { font-size: 1.1em; font-weight: 500; }
         .switch { position: relative; display: inline-block; width: 60px; height: 34px; }
         .switch input { opacity: 0; width: 0; height: 0; }
         .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
         .slider:before { position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
-        input:checked + .slider { background-color: #28a745; }
+        input:checked + .slider { background-color: var(--primary-color); }
         input:checked + .slider:before { transform: translateX(26px); }
-
-        /* ▼▼▼【追加】強度設定のスタイルを追加 ▼▼▼ */
-        .strength-selector { padding: 1rem; background: #f8f9fa; border-radius: 8px; }
+        .strength-selector { padding: 1rem; background: var(--background-color); border-radius: 8px; }
         .strength-selector .strength-label { font-size: 1.1em; font-weight: 500; margin-bottom: 1rem; display: block; }
         .strength-options { display: flex; justify-content: space-around; }
         .strength-options label { cursor: pointer; }
         .strength-options input { margin-right: 0.5rem; }
-
-        /* 自動フィルタリングルールの表示 */
-        .rules-display { margin-top: 1.5rem; padding: 1.5rem; background-color: #f8f9fa; border-radius: 8px; }
-        .rules-display h3 { margin-top: 0; font-size: 1.2em; color: #333; }
+        .rules-display { margin-top: 1.5rem; padding: 1.5rem; background-color: var(--background-color); border-radius: 8px; }
+        .rules-display h3 { margin-top: 0; font-size: 1.2em; color: var(--text-color); }
         .rules-list { list-style-type: none; padding-left: 0; }
         .rules-list li { margin-bottom: 1rem; }
-        .rules-list strong { color: #0056b3; font-weight: 700; }
+        .rules-list strong { color: var(--primary-color-dark); font-weight: 700; }
         .rules-list .categories { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
         .rules-list .category-tag { background-color: #e9ecef; color: #495057; padding: 0.3rem 0.8rem; border-radius: 1rem; font-size: 0.9em; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>フィルター設定</h1>
-        <p style="text-align: center; color: #666;">タイムラインに表示したくない投稿の種類を選択してください。</p>
+        <div class="card">
+            <h1>フィルター設定</h1>
+            <p style="text-align: center; color: var(--text-color-light);">タイムラインに表示したくない投稿の種類を選択してください。</p>
 
-        <form class="settings-form" id="settings-form" action="/settings" method="post">
-            
-            <div class="axis-group">
-                <h2>性格診断に基づく自動フィルタリング</h2>
-                <div class="switch-container">
-                    <span class="switch-label">あなたの性格に合わない投稿を自動で非表示にする</span>
-                    <label class="switch">
-                        <input type="checkbox" name="auto_filter_switch" {% if user_settings.auto_filter_enabled %}checked{% endif %}>
-                        <span class="slider"></span>
-                    </label>
+            <form class="settings-form" id="settings-form" action="/settings" method="post">
+                <div class="axis-group">
+                    <h2>性格診断に基づく自動フィルタリング</h2>
+                    <div class="switch-container">
+                        <span class="switch-label">あなたの性格に合わない投稿を自動で非表示にする</span>
+                        <label class="switch">
+                            <input type="checkbox" name="auto_filter_switch" {% if user_settings.auto_filter_enabled %}checked{% endif %}>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="strength-selector">
+                        <span class="strength-label">フィルタリングの強度</span>
+                        <div class="strength-options">
+                            <label><input type="radio" name="filter_strength" value="1" {% if user_settings.filter_strength == 1 %}checked{% endif %}> 弱め</label>
+                            <label><input type="radio" name="filter_strength" value="2" {% if user_settings.filter_strength == 2 %}checked{% endif %}> 標準</label>
+                            <label><input type="radio" name="filter_strength" value="3" {% if user_settings.filter_strength == 3 %}checked{% endif %}> 強め</label>
+                        </div>
+                    </div>
+                    <p style="font-size: 0.9em; color: #666; margin-top: 1rem;">
+                        この設定をオンにすると、あなたのHEXACO診断結果に基づいて、不快に感じる可能性のある投稿が自動的にモザイク表示されます。
+                    </p>
+                    {% if user_settings.auto_filter_enabled and active_rules %}
+                    <div class="rules-display">
+                        <h3>現在あなたに適用中のフィルタリングルール</h3>
+                        <ul class="rules-list">
+                            {% for trait_name, categories in active_rules.items() %}
+                                {% if categories %}
+                                <li>
+                                    <strong>{{ trait_name }}の特性により、以下の投稿を非表示にしています:</strong>
+                                    <div class="categories">
+                                        {% for category in categories %}
+                                            <span class="category-tag">{{ category }}</span>
+                                        {% endfor %}
+                                    </div>
+                                </li>
+                                {% endif %}
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="axis-group">
+                    <h2>類似投稿の自動フィルタリング</h2>
+                    <div class="switch-container">
+                        <span class="switch-label">不快報告した投稿と似ている投稿を自動で非表示にする</span>
+                        <label class="switch">
+                            <input type="checkbox" name="similarity_filter_switch" {% if user_settings.similarity_filter_enabled %}checked{% endif %}>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <p style="font-size: 0.9em; color: #666; margin-top: 1rem;">
+                        この設定をオンにすると、あなたが「不快に感じた」と報告した投稿と内容が似ている投稿が、AIによって自動的にモザイク表示されます。
+                    </p>
                 </div>
                 
-                <div class="strength-selector">
-                    <span class="strength-label">フィルタリングの強度</span>
-                    <div class="strength-options">
-                        <label><input type="radio" name="filter_strength" value="1" {% if user_settings.filter_strength == 1 %}checked{% endif %}> 弱め</label>
-                        <label><input type="radio" name="filter_strength" value="2" {% if user_settings.filter_strength == 2 %}checked{% endif %}> 標準</label>
-                        <label><input type="radio" name="filter_strength" value="3" {% if user_settings.filter_strength == 3 %}checked{% endif %}> 強め</label>
+                <div class="axis-group">
+                    <h2>コンテンツカテゴリの手動設定</h2>
+                    <p style="font-size: 0.9em; color: #666; margin-top: 1rem;">
+                        自動フィルタリングに加えて、特定のトピックの投稿を非表示にしたい場合は以下から選択してください。
+                    </p>
+                    {% for group_name, items in all_content_categories.items() %}
+                    <div class="category-group">
+                        <h3>{{ group_name }}</h3>
+                        <div class="checkbox-grid">
+                            {% for item in items %}
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="hidden_content" value="{{ item }}"
+                                       {% if item in user_settings.hidden_content_categories %}checked{% endif %}>
+                                {{ item }}
+                            </label>
+                            {% endfor %}
+                        </div>
                     </div>
+                    {% endfor %}
                 </div>
 
-                <p style="font-size: 0.9em; color: #666; margin-top: 1rem;">
-                    この設定をオンにすると、あなたのHEXACO診断結果に基づいて、不快に感じる可能性のある投稿が自動的にモザイク表示されます。強度は3段階で調整できます。
-                </p>
+                <div style="text-align: center; margin-top: 2.5rem;">
+                    <button type="submit" class="btn btn-primary">設定を保存</button>
+                </div>
 
-                {% if user_settings.auto_filter_enabled and active_rules %}
-                <div class="rules-display">
-                    <h3>現在あなたに適用中のフィルタリングルール</h3>
-                    <ul class="rules-list">
-                        {% for trait_name, categories in active_rules.items() %}
-                        <li>
-                            <strong>{{ trait_name }}の特性により、以下の投稿を非表示にしています:</strong>
-                            <div class="categories">
-                                {% for category in categories %}
-                                    <span class="category-tag">{{ category }}</span>
-                                {% endfor %}
-                            </div>
-                        </li>
-                        {% endfor %}
-                    </ul>
+                {% if save_success %}
+                <div class="success-message" id="success-msg" style="display: none;">
+                    設定を保存しました！
                 </div>
                 {% endif %}
-            </div>
-
-            <div class="axis-group">
-                <h2>類似投稿の自動フィルタリング</h2>
-                <div class="switch-container">
-                    <span class="switch-label">不快報告した投稿と似ている投稿を自動で非表示にする</span>
-                    <label class="switch">
-                        <input type="checkbox" name="similarity_filter_switch" {% if user_settings.similarity_filter_enabled %}checked{% endif %}>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-                <p style="font-size: 0.9em; color: #666; margin-top: 1rem;">
-                    この設定をオンにすると、あなたが「不快に感じた」と報告した投稿と内容が似ている投稿が、AIによって自動的にモザイク表示されます。
-                </p>
-            </div>
-            
-            <div class="axis-group">
-                <h2>コンテンツカテゴリの手動設定</h2>
-                <p style="font-size: 0.9em; color: #666; margin-top: 1rem;">
-                    自動フィルタリングに加えて、特定のトピックの投稿を非表示にしたい場合は以下から選択してください。
-                </p>
-                {% for group_name, items in all_content_categories.items() %}
-                <div class="category-group">
-                    <h3>{{ group_name }}</h3>
-                    <div class="checkbox-grid">
-                        {% for item in items %}
-                        <label class="checkbox-label">
-                            <input type="checkbox" name="hidden_content" value="{{ item }}"
-                                   {% if item in user_settings.hidden_content_categories %}checked{% endif %}>
-                            {{ item }}
-                        </label>
-                        {% endfor %}
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-
-            <div class="button-container">
-                <button type="submit" class="button">設定を保存</button>
-            </div>
-
-            <div class="success-message" id="success-msg">
-                ✅ 設定を保存しました！
-            </div>
-
-        </form>
-        <a href="/timeline" class="nav-link">タイムラインに戻る</a>
+            </form>
+        </div>
+        <a href="/timeline" style="display: block; text-align: center; margin-top: 1rem;">タイムラインに戻る</a>
     </div>
 
     <script>
@@ -156,14 +142,12 @@
                 window.scrollTo(0, parseInt(scrollpos, 10));
                 localStorage.removeItem('scrollpos');
             }
-
             const form = document.getElementById('settings-form');
             if (form) {
                 form.addEventListener('submit', () => {
                     localStorage.setItem('scrollpos', window.scrollY);
                 });
             }
-
             {% if save_success %}
                 const successMsg = document.getElementById('success-msg');
                 if (successMsg) {

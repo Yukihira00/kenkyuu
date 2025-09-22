@@ -1,0 +1,203 @@
+/* static/style.css */
+
+/* === デザインシステム定義 (CSS変数) === */
+:root {
+    --primary-color: #4A90E2; /* 知的で信頼感のあるブルー */
+    --primary-color-dark: #357ABD;
+    --secondary-color: #50E3C2; /* アクセントのミントグリーン */
+    --accent-color-red: #E74C3C;
+    --background-color: #F7F9FC; /* 明るく清潔感のある背景色 */
+    --card-background-color: #FFFFFF;
+    --text-color: #333333;
+    --text-color-light: #667788;
+    --border-color: #DEE2E6;
+    --shadow: 0 4px 12px rgba(0,0,0,0.08);
+    --border-radius: 12px;
+    --font-family: 'Noto Sans JP', sans-serif;
+}
+
+/* === 基本スタイル === */
+body {
+    font-family: var(--font-family);
+    background-color: var(--background-color);
+    color: var(--text-color);
+    margin: 0;
+    padding: 1rem;
+    -webkit-tap-highlight-color: transparent; /* スマホタップ時のハイライトを無効化 */
+    caret-color: transparent; /* ▼▼▼【追加】テキストカーソルを非表示にする ▼▼▼ */
+}
+
+.container {
+    max-width: 720px;
+    margin: 1rem auto;
+    padding: 1.5rem;
+}
+
+/* === カードスタイル === */
+.card {
+    background-color: var(--card-background-color);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+}
+@media (max-width: 600px) {
+    .card { padding: 1.5rem; }
+}
+
+/* === タイポグラフィ === */
+h1, h2, h3 {
+    margin-top: 0;
+    font-weight: 700;
+}
+h1 {
+    font-size: 1.8em;
+    text-align: center;
+    margin-bottom: 1rem;
+    color: var(--primary-color);
+}
+h2 {
+    font-size: 1.5em;
+    margin-bottom: 1.5rem;
+    color: var(--text-color);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.5rem;
+}
+p {
+    line-height: 1.7;
+    margin-top: 0;
+    margin-bottom: 1rem;
+}
+a {
+    color: var(--primary-color);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+a:hover {
+    color: var(--primary-color-dark);
+    text-decoration: underline;
+}
+
+/* === ボタン === */
+.btn {
+    display: inline-block;
+    padding: 0.8rem 1.5rem;
+    border: none;
+    border-radius: 8px;
+    font-size: 1em;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s;
+    letter-spacing: 0.5px;
+}
+.btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+}
+.btn-primary:hover {
+    background-color: var(--primary-color-dark);
+    transform: translateY(-2px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    text-decoration: none;
+    color: white;
+}
+.btn-secondary {
+    background-color: #6c757d;
+    color: white;
+}
+.btn-secondary:hover {
+    background-color: #5a6268;
+    transform: translateY(-2px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    text-decoration: none;
+    color: white;
+}
+.btn-block {
+    display: block;
+    width: 100%;
+}
+
+/* === フォーム === */
+.form-group {
+    margin-bottom: 1.5rem;
+}
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: var(--text-color-light);
+}
+.form-group input {
+    width: 100%;
+    padding: 0.8rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 1em;
+    box-sizing: border-box; /* paddingを含めた幅計算に */
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.form-group input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.2);
+}
+.error-message {
+    color: var(--accent-color-red);
+    text-align: center;
+    margin-top: 1rem;
+    font-weight: 500;
+}
+.info-link {
+    text-align: right;
+    font-size: 0.9em;
+    margin-top: -1rem;
+    margin-bottom: 1.5rem;
+}
+
+/* === ヘッダー (タイムラインなど) === */
+.header {
+    background: var(--card-background-color);
+    border-radius: var(--border-radius);
+    padding: 1rem 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: var(--shadow);
+}
+.header-top { display: flex; justify-content: space-between; align-items: center; }
+.header h1 {
+    margin: 0;
+    font-size: 1.2em;
+    color: var(--text-color);
+    border: none;
+    text-align: left;
+}
+.hamburger-menu { position: relative; }
+.menu-btn { display: flex; flex-direction: column; justify-content: space-around; width: 30px; height: 25px; background: transparent; border: none; cursor: pointer; padding: 0; z-index: 1001; }
+.menu-btn span { display: block; width: 100%; height: 3px; background-color: var(--text-color); border-radius: 3px; transition: all 0.3s ease-in-out; }
+.nav-links { list-style: none; position: absolute; top: 40px; right: 0; background: white; border-radius: var(--border-radius); box-shadow: 0 4px 15px rgba(0,0,0,0.15); margin: 0; padding: 10px 0; width: 200px; transform: translateY(-10px); opacity: 0; visibility: hidden; transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s; z-index: 1000; overflow: hidden; }
+.nav-links.open { opacity: 1; visibility: visible; transform: translateY(0); }
+.nav-links li a { display: block; padding: 12px 20px; color: var(--text-color); text-decoration: none; font-weight: 500; transition: background-color 0.2s; }
+.nav-links li a:hover { background-color: var(--background-color); }
+.nav-links .logout a { color: var(--accent-color-red); }
+.nav-links .logout a:hover { background-color: #fbeae8; }
+
+/* === タイムライン投稿スタイル === */
+.post {
+    background: var(--card-background-color);
+    padding: 1.5rem;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 1.5rem;
+}
+.post-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+.author-section { display: flex; align-items: center; }
+.post-avatar { width: 40px; height: 40px; border-radius: 50%; margin-right: 12px; }
+.post-author-info { display: flex; flex-direction: column; }
+.post-author { font-weight: bold; font-size: 1em; }
+.post-handle { color: var(--text-color-light); font-size: 0.9em; }
+.post-footer { font-size: 0.8em; color: var(--text-color-light); margin-top: 15px; text-align: right; }
+.post-mosaic-container { position: relative; }
+.post-content-hidden { filter: blur(8px) grayscale(50%); transition: filter 0.3s ease-in-out; }
+.post-content-hidden.revealed { filter: none; }
+.reveal-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: rgba(255, 255, 255, 0.6); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition: opacity 0.3s ease-in-out; z-index: 10; border-radius: var(--border-radius); }
+.reveal-overlay.hidden { opacity: 0; pointer-events: none; }
