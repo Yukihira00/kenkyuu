@@ -64,7 +64,7 @@
     <div class="container">
         <div class="header">
             <div class="header-top">
-                <h1>{{ user.display_name or user.handle }}</h1>
+                <h1>{{ user.display_name or user.handle }}さんのタイムライン</h1>
                 <div class="hamburger-menu">
                     <button class="menu-btn" id="menu-btn"><span></span><span></span><span></span></button>
                     <ul class="nav-links" id="nav-links">
@@ -75,6 +75,12 @@
                 </div>
             </div>
         </div>
+
+        {% if total_post_count > 0 %}
+            <div class="card" style="text-align: center; margin-bottom: 1.5rem; padding: 1rem;">
+                <p style="margin: 0;"><strong>{{ total_post_count }}</strong>件中<strong>{{ hidden_post_count }}</strong>件の投稿がフィルターによって非表示にされています。</p>
+            </div>
+        {% endif %}
         
         {% if feed %}
             {% for item in feed %}
