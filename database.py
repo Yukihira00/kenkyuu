@@ -75,7 +75,7 @@ def initialize_database():
     CREATE TABLE IF NOT EXISTS post_analysis_cache (
         post_uri TEXT PRIMARY KEY, content_category TEXT NOT NULL,
         expression_category TEXT NOT NULL, style_stance_category TEXT NOT NULL,
-        embedding vector(384),
+        embedding vector(768),
         analyzed_at TIMESTAMPTZ NOT NULL
     )''')
     

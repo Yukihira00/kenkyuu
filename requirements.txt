@@ -11,3 +11,4 @@ google-generativeai
 pgvector
 itsdangerous
 python-multipart
+pandas

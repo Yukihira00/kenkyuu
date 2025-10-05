@@ -10,8 +10,10 @@ load_dotenv(encoding='utf-8')
 API_KEY = os.getenv('GEMINI_API_KEY')
 
 genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel('gemini-2.5-flash-lite')
-embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+# ▼▼▼【変更】モデルを高性能なものに変更 ▼▼▼
+model = genai.GenerativeModel('gemini-2.5-flash')
+# ▼▼▼【変更】埋め込みモデルを高性能なものに変更 ▼▼▼
+embedding_model = SentenceTransformer('all-mpnet-base-v2')
 
 # --- カテゴリ定義 ---
 CONTENT_CATEGORIES = {
@@ -47,18 +49,20 @@ def analyze_posts_batch(texts: list[str]):
         return [error_result] * len(texts)
 
     try:
+        # ▼▼▼【変更】埋め込みの次元数に合わせてデータベースのカラムサイズも変更が必要です ▼▼▼
+        # all-mpnet-base-v2 の次元数は 768 です。
+        # database.py の post_analysis_cache テーブルの embedding カラムを vector(768) に変更してください。
         embeddings = embedding_model.encode(texts).tolist()
     except Exception as e:
         print(f"テキストのベクトル化中にエラーが発生しました: {e}")
         embeddings = [None] * len(texts)
 
-    # テキストが空のリストの場合は、空のリストを返す
     if not texts:
         return []
 
     formatted_texts = "\n".join(f"投稿{i+1}:\n---\n{text}\n---" for i, text in enumerate(texts))
 
-    # ▼▼▼【変更】AIへの指示をより厳密に修正 ▼▼▼
+    # ▼▼▼【変更】Few-shotプロンプティングを追加し、AIへの指示をより具体的に ▼▼▼
     prompt = f"""
     以下のSNS投稿リスト（{len(texts)}件）を分析し、3つの軸で最も適切なカテゴリを1つずつ選択してください。
     回答は、JSONオブジェクトのリスト形式で、投稿の順番通りに出力してください。
@@ -72,6 +76,20 @@ def analyze_posts_batch(texts: list[str]):
     - "content_category": {flat_content_categories}
     - "expression_category": {EXPRESSION_CATEGORIES}
     - "style_stance_category": {STYLE_STANCE_CATEGORIES}
+
+    # 分類例 (このような形式で分類してください):
+    - 投稿例: 「新しいプロジェクトが無事完了！チームのみんな、本当にお疲れ様でした！最高のメンバーに感謝！」
+      - "content_category": "仕事・キャリア"
+      - "expression_category": "肯定的"
+      - "style_stance_category": "感謝・ポジティブな感想"
+    - 投稿例: 「今日のランチはパスタ。まあまあ美味しかった。」
+      - "content_category": "食事・料理"
+      - "expression_category": "中立・客観的"
+      - "style_stance_category": "当たり障りのない意見"
+    - 投稿例: 「なんでいつもこうなるの？本当にありえない。もう我慢の限界。」
+      - "content_category": "人間関係"
+      - "expression_category": "怒り・不満"
+      - "style_stance_category": "愚痴・不平不満"
 
     # 制約（絶対に守ってください）:
     - 必ず投稿{len(texts)}件分、つまり{len(texts)}個のJSONオブジェクトをリストに入れて返してください。
@@ -91,21 +109,18 @@ def analyze_posts_batch(texts: list[str]):
     """
     try:
         response = model.generate_content(prompt)
-        # 応答テキストからJSON部分のみを抽出する正規表現を改善
         match = re.search(r'```json\s*(\[.*\])\s*```|(\[.*\])', response.text, re.DOTALL)
         if not match:
             print("エラー: LLM応答からJSONリストが見つかりません。")
             print(f"--- LLMからの応答 ---\n{response.text}\n--------------------")
             return [error_result] * len(texts)
 
-        # マッチしたグループのいずれかからJSONテキストを取得
         json_text = match.group(1) or match.group(2)
         analysis_results_json = json.loads(json_text)
 
         if isinstance(analysis_results_json, list) and len(analysis_results_json) == len(texts):
             full_results = []
             for i, result in enumerate(analysis_results_json):
-                # 念の為、結果に必要なキーが含まれているか確認
                 final_result = {
                     "content_category": result.get("content_category", "不明"),
                     "expression_category": result.get("expression_category", "不明"),
@@ -125,7 +140,6 @@ def analyze_posts_batch(texts: list[str]):
         return [error_result] * len(texts)
     except Exception as e:
         print(f"LLMでの分析中に予期せぬエラーが発生しました: {e}")
-        # response変数が初期化されているか確認
         if 'response' in locals() and hasattr(response, 'text'):
             print(f"--- LLMからの応答 ---\n{response.text}\n--------------------")
         return [error_result] * len(texts)
