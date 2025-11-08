@@ -1,12 +1,12 @@
 # export_timeline_for_analysis.py
 import os
 import llm_analyzer
-import timeline_checker 
 from dotenv import load_dotenv
 import sys
 from atproto import Client
 import time
 import textwrap
+import csv  # ◀ CSVモジュールをインポート
 
 # .envファイルから環境変数を読み込む
 load_dotenv(encoding='utf-8')
@@ -16,8 +16,8 @@ BSKY_APP_PASSWORD = os.getenv('BSKY_APP_PASSWORD')
 
 def fetch_and_export_timeline():
     """
-    あなたのBlueskyタイムラインから投稿を取得し、重複（リポスト・同一内容）を除外し、
-    詳細情報と共にLLMで分類し、結果をテキストファイルに出力する。
+    Blueskyから日本語の公開投稿を取得し、重複（同一内容）を除外し、
+    詳細情報と共にLLMで分類し、結果をテキストファイルと採点用CSVに出力する。
     """
     if not BSKY_HANDLE or not BSKY_APP_PASSWORD:
         print("エラー: .envファイルに BSKY_HANDLE と BSKY_APP_PASSWORD を設定してください。")
@@ -32,73 +32,73 @@ def fetch_and_export_timeline():
         print(f"Blueskyへのログインに失敗しました: {e}")
         return
     
-    print(f"Bluesky ({BSKY_HANDLE}) のタイムラインを取得しています... (最大100件)")
+    # ▼▼▼ 【変更箇所】 タイムライン取得を、日本語の投稿検索に変更 ▼▼▼
+    print(f"Blueskyから日本語の投稿を検索しています... (最大100件)")
     
     try:
-        raw_feed = timeline_checker.get_timeline_data(BSKY_HANDLE, BSKY_APP_PASSWORD, limit=100)
-    except Exception as e:
-        print(f"タイムラインの取得中にエラーが発生しました: {e}")
-        return
-
-    if not raw_feed:
-        print("タイムラインの取得に失敗したか、表示できる投稿がありません。")
-        return
-
-    # ▼▼▼ 【修正箇所】 同一テキスト内容の重複排除ロジックを追加 ▼▼▼
-    
-    feed = []
-    seen_uris = set()
-    seen_texts = set() # ◀◀◀ 【追加】 処理済みのテキスト内容を記憶
-    
-    repost_count = 0
-    duplicate_text_count = 0 # ◀◀◀ 【追加】
-    
-    for item in raw_feed: # item は FeedViewPost
+        # ▼▼▼ 【検索クエリ修正】'q' に ワイルドカード '*' を指定 ▼▼▼
+        response = client.app.bsky.feed.search_posts(
+            params={
+                'q': '*',        # 検索クエリ (ワイルドカード)
+                'lang': 'ja',   # 言語を日本語に指定
+                'limit': 100,   # 100件取得
+                'sort': 'latest' # 最新の投稿を取得
+            }
+        )
+        # ▲▲▲ 【検索クエリ修正ここまで】 ▲▲▲
         
-        # 1. 純粋なリポスト(reasonが存在)する場合は除外する
-        if item.reason:
-            repost_count += 1
+        # search_posts は PostView のリストを返す
+        raw_posts = response.posts
+        
+    except Exception as e:
+        print(f"投稿の検索中にエラーが発生しました: {e}")
+        return
+
+    if not raw_posts:
+        print("検索結果の取得に失敗したか、表示できる投稿がありません。")
+        return
+
+    # ▼▼▼ 重複排除ロジック (変更なし) ▼▼▼
+    
+    feed = [] # ここには PostView が入る
+    seen_uris = set()
+    seen_texts = set()
+    
+    duplicate_text_count = 0
+    
+    for post in raw_posts: # post は PostView
+        
+        if post.uri in seen_uris:
             continue
             
-        # 2. 投稿URIで重複チェック (APIが同じものを返す場合)
-        if item.post.uri in seen_uris:
-            continue
+        if hasattr(post.record, 'text') and post.record.text:
+            text = post.record.text.strip()
             
-        # 3. テキスト内容を取得 (リポストでない投稿のみ)
-        if hasattr(item.post.record, 'text') and item.post.record.text:
-            text = item.post.record.text.strip()
-            
-            if not text: # 空の投稿はスキップ
+            if not text:
                 continue
                 
-            # 4. ◀◀◀ 【追加】 テキスト内容が重複していないかチェック
             if text in seen_texts:
                 duplicate_text_count += 1
                 continue
-            # ◀◀◀ 【追加ここまで】
             
-            # すべてのチェックを通過
-            feed.append(item)
-            seen_uris.add(item.post.uri)
-            seen_texts.add(text) # ◀◀◀ 【追加】 処理済みテキストとして記憶
+            feed.append(post)
+            seen_uris.add(post.uri)
+            seen_texts.add(text)
         
-    print(f"タイムラインから {len(raw_feed)}件取得。")
-    print(f"  純粋なリポスト {repost_count}件を除外しました。")
-    print(f"  内容が重複する投稿 {duplicate_text_count}件を除外しました。") # ◀◀◀ 【追加】
+    print(f"検索で {len(raw_posts)}件取得。")
+    print(f"  内容が重複する投稿 {duplicate_text_count}件を除外しました。")
     print(f"  重複を除外した {len(feed)}件（ユニークな内容の投稿）を処理します。")
-    # ▲▲▲ 【修正ここまで】 ▲▲▲
 
-    posts_data_for_llm = []
+    posts_data_for_llM = []
     original_posts_info = []
     author_profile_cache = {}
 
     print("投稿情報を処理中... (著者プロフィールを取得するため、時間がかかります)")
     
-    for i, item in enumerate(feed):
+    for i, post in enumerate(feed):
         
-        # item.post.record からテキストを取得 (チェック済み)
-        text = item.post.record.text.strip()
-        author_did = item.post.author.did
+        text = post.record.text.strip()
+        author_did = post.author.did
             
         if author_did not in author_profile_cache:
             try:
@@ -115,26 +115,26 @@ def fetch_and_export_timeline():
         followers_count = full_author_profile.followers_count if full_author_profile else None
         follows_count = full_author_profile.follows_count if full_author_profile else None
         
-        posts_data_for_llm.append(text)
+        posts_data_for_llM.append(text)
         
         original_posts_info.append({
             "post_text": text,
             "text_length": len(text),
-            "author_handle": item.post.author.handle,
+            "author_handle": post.author.handle,
             "followers_count": followers_count,
             "follows_count": follows_count,
-            "post_uri": item.post.uri
+            "post_uri": post.uri
         })
 
-    if not posts_data_for_llm:
+    if not posts_data_for_llM:
         print("分析対象のテキスト投稿がありませんでした。")
         return
 
-    print(f"--- {len(posts_data_for_llm)}件の投稿をLLMで分類します ---")
+    print(f"--- {len(posts_data_for_llM)}件の投稿をLLMで分類します ---")
     print("（APIへの問い合わせとベクトル化のため、数十秒かかる場合があります）")
 
     try:
-        llm_results = llm_analyzer.analyze_posts_batch(posts_data_for_llm)
+        llm_results = llm_analyzer.analyze_posts_batch(posts_data_for_llM)
     except Exception as e:
         print(f"LLMによる分析中にエラーが発生しました: {e}")
         return
@@ -149,6 +149,7 @@ def fetch_and_export_timeline():
         })
         final_data.append(post_info)
 
+    # --- 1. テキストファイルへの出力 (変更なし) ---
     print("--- 分析結果をテキストファイルに出力します ---")
     
     output_lines = []
@@ -157,7 +158,7 @@ def fetch_and_export_timeline():
                                       subsequent_indent='    ')
 
     output_lines.append("="*TEXT_WIDTH)
-    output_lines.append("【Bluesky タイムライン分析結果 (リポスト・同一内容除外)】")
+    output_lines.append("【Bluesky 公開日本語投稿 分析結果 (重複除外)】")
     output_lines.append("="*TEXT_WIDTH)
 
     for i, data in enumerate(final_data):
@@ -188,6 +189,47 @@ def fetch_and_export_timeline():
     
     except Exception as e:
         print(f"\nテキストファイルへの書き込み中にエラーが発生しました: {e}")
+
+
+    # --- 2. ◀◀◀【ここから修正】0/1採点用のCSVファイル出力 ---
+    print("--- 統計チェック用のCSVファイルを出力します ---")
+    output_filename_csv = "analysis_for_checking_01.csv" # ◀ ファイル名を変更
+    
+    # CSVのヘッダー（列名）を修正
+    headers = [
+        "post_uri", 
+        "post_text", 
+        "llm_content_category", 
+        "is_content_correct (0 or 1)",      # ◀ 人が 0 か 1 を入力する列
+        "llm_expression_category", 
+        "is_expression_correct (0 or 1)", # ◀ 人が 0 か 1 を入力する列
+        "llm_style_stance_category",
+        "is_style_correct (0 or 1)"  # ◀ 人が 0 か 1 を入力する列
+    ]
+
+    try:
+        with open(output_filename_csv, 'w', encoding='utf-8-sig', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(headers)
+            
+            for data in final_data:
+                writer.writerow([
+                    data['post_uri'],
+                    data['post_text'],
+                    data['content_category'],
+                    "", # is_content_correct (空欄)
+                    data['expression_category'],
+                    "", # is_expression_correct (空欄)
+                    data['style_stance_category'],
+                    ""  # is_style_correct (空欄)
+                ])
+        
+        print(f"✅ 統計チェック用データを '{output_filename_csv}' に正常に出力しました。")
+    
+    except Exception as e:
+        print(f"\nCSVファイルへの書き込み中にエラーが発生しました: {e}")
+    # --- ◀◀◀【修正ここまで】 ---
+
 
 if __name__ == "__main__":
     if sys.stdout.encoding != 'utf-8':
