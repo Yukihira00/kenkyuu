@@ -24,10 +24,12 @@ def fetch_and_classify_timeline():
         print("BSKY_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx")
         return
 
-    print(f"Bluesky ({BSKY_HANDLE}) からタイムラインを取得しています... (最大100件)")
+    # ▼▼▼【変更箇所】100件から1000件に変更 ▼▼▼
+    print(f"Bluesky ({BSKY_HANDLE}) からタイムラインを取得しています... (最大1000件)")
     
-    # timeline_checker を使ってタイムラインデータを取得 (limit=100 を指定)
-    feed = timeline_checker.get_timeline_data(BSKY_HANDLE, BSKY_APP_PASSWORD, limit=100)
+    # timeline_checker を使ってタイムラインデータを取得 (limit=1000 を指定)
+    feed = timeline_checker.get_timeline_data(BSKY_HANDLE, BSKY_APP_PASSWORD, limit=1000)
+    # ▲▲▲【変更箇所ここまで】▲▲▲
 
     if not feed:
         print("タイムラインの取得に失敗したか、表示できる投稿がありません。")

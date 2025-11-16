@@ -4,9 +4,9 @@ import llm_analyzer
 from dotenv import load_dotenv
 import sys
 from atproto import Client
-import time
+import time  # ◀ time モジュールが使われることを確認 (既にインポートされています)
 import textwrap
-import csv  # ◀ CSVモジュールをインポート
+import csv
 
 # .envファイルから環境変数を読み込む
 load_dotenv(encoding='utf-8')
@@ -32,27 +32,48 @@ def fetch_and_export_timeline():
         print(f"Blueskyへのログインに失敗しました: {e}")
         return
     
-    # ▼▼▼ 【変更箇所】 タイムライン取得を、日本語の投稿検索に変更 ▼▼▼
-    print(f"Blueskyから日本語の投稿を検索しています... (最大100件)")
+    # ▼▼▼ 【変更箇所】 1000件取得するようにページネーション処理を追加 ▼▼▼
+    print(f"Blueskyから日本語の投稿を検索しています... (最大1000件)")
     
+    all_raw_posts = []
+    cursor = None
+    TARGET_COUNT = 1000
+    REQUEST_LIMIT = 100  # APIの1回あたりの最大取得件数
+
     try:
-        # ▼▼▼ 【検索クエリ修正】'q' に ワイルドカード '*' を指定 ▼▼▼
-        response = client.app.bsky.feed.search_posts(
-            params={
+        while len(all_raw_posts) < TARGET_COUNT:
+            print(f"  ... {len(all_raw_posts)}件取得済み。追加で{REQUEST_LIMIT}件を検索します ...")
+
+            params = {
                 'q': '*',        # 検索クエリ (ワイルドカード)
                 'lang': 'ja',   # 言語を日本語に指定
-                'limit': 100,   # 100件取得
+                'limit': REQUEST_LIMIT,
                 'sort': 'latest' # 最新の投稿を取得
             }
-        )
-        # ▲▲▲ 【検索クエリ修正ここまで】 ▲▲▲
-        
-        # search_posts は PostView のリストを返す
-        raw_posts = response.posts
+            if cursor:
+                params['cursor'] = cursor
+
+            response = client.app.bsky.feed.search_posts(params=params)
+            
+            if not response.posts:
+                print("  これ以上取得できる投稿がありません。")
+                break
+                
+            all_raw_posts.extend(response.posts)
+            cursor = response.cursor
+            
+            if not cursor:
+                print("  カーソルが返されませんでした。検索を終了します。")
+                break
+            
+            time.sleep(0.5)  # API負荷軽減のための待機
+
+        raw_posts = all_raw_posts[:TARGET_COUNT]  # 厳密にTARGET_COUNT件にする
         
     except Exception as e:
         print(f"投稿の検索中にエラーが発生しました: {e}")
         return
+    # ▲▲▲ 【変更箇所ここまで】 ▲▲▲
 
     if not raw_posts:
         print("検索結果の取得に失敗したか、表示できる投稿がありません。")
