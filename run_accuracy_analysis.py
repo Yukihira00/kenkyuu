@@ -1,4 +1,5 @@
 # run_accuracy_analysis.py
+
 import os
 import pandas as pd
 import numpy as np
@@ -13,14 +14,14 @@ BSKY_APP_PASSWORD = os.getenv('BSKY_APP_PASSWORD')
 
 # 採点済みのCSVファイル
 CSV_FILE = 'analysis_for_checking_01.csv'
-# ◀◀◀ 【変更】集計結果を保存するファイル (日本語版)
+# 集計結果を保存するファイル (日本語版)
 SUMMARY_FILE = 'accuracy_summary_for_excel_jp.txt'
 
 
 def get_metadata_for_posts(df: pd.DataFrame) -> pd.DataFrame:
     """
     DataFrameを受け取り、post_uriを使ってBlueskyからメタデータを取得し、
-    新しい列（followers_count, follows_count）を追加して返す。
+    新しい列（followers_count, follows_count）を追加して返す。（APIエラー対応済み）
     """
     print(f"Bluesky ({BSKY_HANDLE}) にログインしています...")
     try:
@@ -44,14 +45,36 @@ def get_metadata_for_posts(df: pd.DataFrame) -> pd.DataFrame:
             posts_response = client.app.bsky.feed.get_posts(
                 params={'uris': chunk_uris}
             )
+            
+            # 投稿ごとにループ
             for post in posts_response.posts:
+                author_did = post.author.did
+                
+                # 個別プロファイル取得で統計情報を補完 (APIエラー対策)
+                followers_count = 0
+                follows_count = 0
+                
+                try:
+                    # get_profileは ProfileViewDetailed を返す（統計情報を含む）
+                    full_profile = client.get_profile(author_did) 
+                    
+                    # Noneチェックを行い、0でフォールバック
+                    followers_count = full_profile.followers_count if full_profile.followers_count is not None else 0
+                    follows_count = full_profile.follows_count if full_profile.follows_count is not None else 0
+                    
+                except Exception:
+                    # プロファイル取得に失敗した場合（アカウント削除など）
+                    pass
+                    
                 # 取得した投稿のメタデータを辞書に保存
                 metadata_map[post.uri] = {
-                    'followers_count': post.author.followers_count or 0,
-                    'follows_count': post.author.follows_count or 0
+                    'followers_count': followers_count,
+                    'follows_count': follows_count
                 }
+
             time.sleep(0.1) # サーバー負荷軽減
         except Exception as e:
+            # このチャンク全体の取得に失敗した場合（例: post_uriが無効など）
             print(f"    URIチャンクの取得中にエラーが発生しました: {e}")
 
     # 辞書のマッピングを使って新しい列を効率的に作成
@@ -69,52 +92,35 @@ def get_metadata_for_posts(df: pd.DataFrame) -> pd.DataFrame:
     print("メタデータの取得とマージが完了しました。")
     return df
 
-def analyze_binned_accuracy(df: pd.DataFrame, metric: str, bins: list, labels: list, output_file):
+
+def calculate_and_display_stats(df: pd.DataFrame, group_col: str, title: str, output_file):
     """
-    指定されたメトリック（列名）とビン（区間）に基づいて、
-    3つの分類軸の正解率（平均）と件数を計算して表示し、
-    結果をテキストファイルにも書き出す。
-    
-    ◀◀◀ 【変更】タイトルと列名を日本語化 ▼▼▼
+    指定された列でグループ化して、正解率と件数を計算し、
+    MarkdownテーブルとCSVをファイルに出力する。
     """
     
-    # 英語のメトリック名を日本語のタイトルにマッピング
     METRIC_MAP = {
-        'followers_count': 'フォロワー数',
-        'follows_count': 'フォロー数',
-        'text_length': '投稿の文字数'
+        'followers_count_group': 'フォロワー数',
+        'follows_count_group': 'フォロー数',
+        'text_length_group': '投稿の文字数',
     }
     
-    analysis_title = f"【分析】{METRIC_MAP.get(metric, metric)} 別 の分類精度"
-    separator = "="*50
-    
-    print("\n" + separator)
-    print(analysis_title)
-    print(separator)
-    
-    output_file.write(f"\n{separator}\n")
-    output_file.write(f"{analysis_title}\n")
-    output_file.write(f"{separator}\n")
-    
-    # 'post_text' 列から text_length を計算 (metric が 'text_length' の場合)
-    if metric == 'text_length' and 'text_length' not in df.columns:
-        # post_text が NaN (空) の場合を考慮
-        df['text_length'] = df['post_text'].fillna('').str.len()
+    # 総合結果の場合、グループ化は行全体
+    if group_col == 'overall':
+        # 行全体で平均とカウントを計算し、ダミーのグループを作成
+        stats_mean = df[['is_content_correct (0 or 1)', 'is_expression_correct (0 or 1)', 'is_style_correct (0 or 1)']].apply('mean').to_frame().T
+        stats_count = df[['is_content_correct (0 or 1)', 'is_expression_correct (0 or 1)', 'is_style_correct (0 or 1)']].apply('count').to_frame().T
+        stats_mean.index = [title]
+        stats_count.index = [title]
+        stats_mean.index.name = '集計グループ'
+    else:
+        # グループ化して平均とカウントを計算
+        stats_mean = df.groupby(group_col, observed=True)[['is_content_correct (0 or 1)', 'is_expression_correct (0 or 1)', 'is_style_correct (0 or 1)']].apply('mean')
+        stats_count = df.groupby(group_col, observed=True)[['is_content_correct (0 or 1)', 'is_expression_correct (0 or 1)', 'is_style_correct (0 or 1)']].apply('count')
+        stats_mean.index.name = METRIC_MAP.get(group_col, group_col) + '_グループ'
 
-    # NaNやInfを0に置き換えてからbinning
-    df[metric] = pd.to_numeric(df[metric], errors='coerce').fillna(0)
-    
-    # pd.cut を使ってデータをビン（グループ）に分ける
-    df[f'{metric}_bin'] = pd.cut(df[metric], bins=bins, labels=labels, right=False)
-    
-    # ビンごとにグループ化し、各精度の平均（＝正解率）と件数を計算
-    accuracy_columns = [
-        'is_content_correct (0 or 1)',
-        'is_expression_correct (0 or 1)',
-        'is_style_correct (0 or 1)'
-    ]
-    
-    # ◀◀◀ 【変更】列名を日本語に定義
+
+    # 日本語列名に変換するための辞書
     JP_COLS_ACC = {
         'is_content_correct (0 or 1)': 'コンテンツ正解率',
         'is_expression_correct (0 or 1)': '表現(感情)正解率',
@@ -126,33 +132,35 @@ def analyze_binned_accuracy(df: pd.DataFrame, metric: str, bins: list, labels: l
         'is_style_correct (0 or 1)': 'スタイル件数'
     }
 
-    # .mean() を .apply('mean') に変更し、日本語列名を適用
-    binned_stats_mean = df.groupby(f'{metric}_bin', observed=True)[accuracy_columns].apply('mean').rename(columns=JP_COLS_ACC)
-    
-    # .count() を .apply('count') に変更し、日本語列名を適用
-    binned_stats_count = df.groupby(f'{metric}_bin', observed=True)[accuracy_columns].apply('count').rename(columns=JP_COLS_COUNT)
-    
-    # 結合して表示
-    final_stats = pd.concat([binned_stats_mean, binned_stats_count], axis=1)
-    
-    # ◀◀◀ 【変更】インデックス名を日本語に
-    final_stats.index.name = f"{METRIC_MAP.get(metric, metric)}_グループ"
-    
-    # 見やすいように調整 (コンソール出力用)
-    pd.set_option('display.float_format', '{:.2%}'.format) # %表示
-    print(final_stats)
-    pd.reset_option('display.float_format') # 設定をリセット
+    # 列名変更
+    stats_mean = stats_mean.rename(columns=JP_COLS_ACC)
+    stats_count = stats_count.rename(columns=JP_COLS_COUNT)
+
+    # 結合
+    final_stats = pd.concat([stats_mean, stats_count], axis=1)
+
+    # タイトルをファイルに書き出し
+    separator = "="*50
+    output_file.write(f"\n{separator}\n")
+    output_file.write(f"【分析】{title}\n")
+    output_file.write(f"{separator}\n")
+
+    # Markdown形式で表示 (正解率はパーセント表記)
+    display_stats = final_stats.copy()
+    for col in JP_COLS_ACC.values():
+        display_stats[col] = display_stats[col].apply(lambda x: f"{x:.2%}")
+
+    # コンソールにはMarkdownテーブルで表示
+    print(f"\n【分析】{title}")
+    print(display_stats.to_markdown(numalign="left", stralign="left"))
     
     # Excelにコピペしやすい形式 (タブ区切り) でファイルに書き出す
-    final_stats_percent = final_stats.copy()
-    
-    # ◀◀◀ 【変更】日本語の列名リストを使って%表示に変換
-    acc_cols_jp = JP_COLS_ACC.values()
-    for col in acc_cols_jp:
-        if col in final_stats_percent.columns:
-            final_stats_percent[col] = final_stats_percent[col].apply(lambda x: f"{x:.2%}")
+    final_stats_excel = final_stats.copy()
+    for col in JP_COLS_ACC.values():
+        # 小数点以下4桁の固定形式で出力（Excelで数値として処理しやすくするため）
+        final_stats_excel[col] = final_stats_excel[col].apply(lambda x: f"{x:.4f}") 
             
-    final_stats_percent.to_csv(output_file, sep='\t')
+    final_stats_excel.to_csv(output_file, sep='\t', float_format='%.4f')
 
 
 def main():
@@ -169,6 +177,7 @@ def main():
     if df['is_content_correct (0 or 1)'].isna().any():
         print("警告: まだ採点が完了していない行があります。")
         print("（採点済みのデータのみで分析を続行します）")
+        # NaNではない行のみを抽出
         df = df.dropna(subset=['is_content_correct (0 or 1)'])
         if df.empty:
             print("分析できる採点済みデータがありません。")
@@ -177,24 +186,61 @@ def main():
     # 2. メタデータをBlueskyから取得してDFにマージ
     df = get_metadata_for_posts(df)
 
-    # 3. 集計結果を保存するファイルを開く
+    # 3. 事前処理: text_lengthを計算
+    if 'text_length' not in df.columns:
+        # post_text が NaN (空) の場合を考慮して文字数（長さ）を計算
+        df['text_length'] = df['post_text'].fillna('').str.len()
+    
+    # 4. 集計結果を保存するファイルを開く
     with open(SUMMARY_FILE, 'w', encoding='utf-8') as f:
         print(f"\n集計結果を {SUMMARY_FILE} に書き出します...")
         
-        # フォロワー数のビン
-        follower_bins = [0, 100, 500, 2000, 10000, np.inf]
-        follower_labels = ['0-99', '100-499', '500-1999', '2000-9999', '10000+']
-        analyze_binned_accuracy(df, 'followers_count', follower_bins, follower_labels, f) # ◀ 英語のmetric名で呼び出す
+        # 4-1. 総合結果の表示
+        calculate_and_display_stats(df, 'overall', '総合分類精度 (全件)', f)
 
-        # フォロー数のビン
-        follow_bins = [0, 100, 500, 2000, np.inf]
-        follow_labels = ['0-99', '100-499', '500-1999', '2000+']
-        analyze_binned_accuracy(df, 'follows_count', follow_bins, follow_labels, f) # ◀ 英語のmetric名で呼び出す
+        # 4-2. 4分位 (Quartile) での均等分割（母数の偏り解消）
+        
+        # フォロワー数 (重複値が多いため、エラー回避の処理を導入)
+        followers = df['followers_count']
+        try:
+            # 4分位で分割
+            df['followers_count_group'] = pd.qcut(followers, q=4, labels=['Q1(少)', 'Q2', 'Q3', 'Q4(多)'], duplicates='drop')
+        except ValueError:
+            # 重複値が多すぎる場合、元の固定ビンを再利用
+            print("\n警告: フォロワー数のグループ分けで重複値エラーが発生しました。元の固定ビンを使用します。")
+            follower_bins = [0, 100, 500, 2000, 10000, np.inf]
+            follower_labels = ['0-99', '100-499', '500-1999', '2000-9999', '10000+']
+            df['followers_count_group'] = pd.cut(followers, bins=follower_bins, labels=follower_labels, right=False)
 
-        # 文章の長さのビン
-        length_bins = [0, 50, 100, 150, 200, np.inf]
-        length_labels = ['0-49', '50-99', '100-149', '150-199', '200+']
-        analyze_binned_accuracy(df, 'text_length', length_bins, length_labels, f) # ◀ 英語のmetric名で呼び出す
+        calculate_and_display_stats(df, 'followers_count_group', 'フォロワー数別 (4分位または固定ビン)', f)
+
+        # フォロー数 (重複値が多いため、エラー回避の処理を導入)
+        follows = df['follows_count']
+        try:
+            df['follows_count_group'] = pd.qcut(follows, q=4, labels=['Q1(少)', 'Q2', 'Q3', 'Q4(多)'], duplicates='drop')
+        except ValueError:
+            # 重複値が多すぎる場合、元の固定ビンを再利用
+            print("\n警告: フォロー数のグループ分けで重複値エラーが発生しました。元の固定ビンを使用します。")
+            follow_bins = [0, 100, 500, 2000, np.inf]
+            follow_labels = ['0-99', '100-499', '500-1999', '2000+']
+            df['follows_count_group'] = pd.cut(follows, bins=follow_bins, labels=follow_labels, right=False)
+
+        calculate_and_display_stats(df, 'follows_count_group', 'フォロー数別 (4分位または固定ビン)', f)
+
+        # 投稿の文字数 (文字数は5分位で分割)
+        text_length = df['text_length']
+        try:
+            # 文字数は5分位で分割
+            df['text_length_group'] = pd.qcut(text_length, q=5, labels=['Q1', 'Q2', 'Q3', 'Q4', 'Q5'], duplicates='drop')
+        except ValueError:
+            # qcutが失敗した場合（例: すべての投稿が同じ文字数）は、元の固定ビンを再利用
+            print("\n警告: 投稿の文字数でのグループ分けで重複値エラーが発生しました。元の固定ビンを使用します。")
+            length_bins = [0, 50, 100, 150, 200, np.inf]
+            length_labels = ['0-49', '50-99', '100-149', '150-199', '200+']
+            df['text_length_group'] = pd.cut(text_length, bins=length_bins, labels=length_labels, right=False)
+            
+        calculate_and_display_stats(df, 'text_length_group', '投稿の文字数別 (5分位または固定ビン)', f)
+
 
     print(f"\n✅ 集計サマリーを {SUMMARY_FILE} に保存しました。")
     print("このファイルをメモ帳などで開き、内容をExcelにコピー＆ペーストしてグラフを作成してください。")
