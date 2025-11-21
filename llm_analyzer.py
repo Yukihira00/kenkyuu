@@ -171,21 +171,18 @@ CONTENT_CATEGORIES = {
 }
 
 
-# 2. expression_category: (▼▼▼【更新】ご指定の25カテゴリ（重複含む）に変更▼▼▼)
+# 2. expression_category: (プルチックの感情の輪に基づく、純粋な感情のみ - 重複なし24要素)
 EXPRESSION_CATEGORIES = [
-    # 8つの基本感情と強弱 (計24)
-    "喜び", "恍惚", "平穏","悲しみ",
-    "期待", "警戒", "興味","驚き",
-    "怒り", "激怒", "煩さ","恐れ",
-    "嫌悪", "憎悪", "退屈","信頼",
-    "悲しみ", "悲痛", "憂い","喜び",
-    "驚き", "驚嘆", "動揺","期待",
-    "恐れ", "恐怖", "心配","怒り",
-    "信頼", "感嘆", "容認","嫌悪",
+    # 8つの基本感情（1列目）
+    "喜び", "信頼", "恐れ", "驚き", "悲しみ", "嫌悪", "怒り", "期待",
+    # 8つの強い感情（2列目）
+    "恍惚", "感嘆", "恐怖", "驚嘆", "悲痛", "憎悪", "激怒", "警戒",
+    # 8つの弱い感情（3列目）
+    "平穏", "容認", "心配", "動揺", "憂い", "退屈", "煩さ", "興味"
 ]
 
 
-# 3. style_stance_category: (▼▼▼【更新】ご指定のスタンス定義（感情カテゴリ除外）に変更▼▼▼)
+# 3. style_stance_category: (文体や書き手のスタンスに関するもののみ)
 STYLE_STANCE_CATEGORIES = [
     # 1. 優位・指導的なスタンス
     "上から目線", "教訓的・啓発的", "皮肉・当てこすり", "恩着せがましい",
@@ -193,12 +190,14 @@ STYLE_STANCE_CATEGORIES = [
     "謙遜・へりくだった", "卑屈・自己卑下",
     # 3. 水平・中立的なスタンス
     "丁寧・中立", "客観的・分析的", "冷淡・突き放す",
+    "独り言・独白", 
     # 4. 協調・共感的なスタンス
     "共感的・寄り添う", "親しみを込めた", "激励・応援",
+    "ユーモア・ネタ", 
+    "情熱・熱狂",    
     # 6. 対立・攻撃的なスタンス
     "挑発的・攻撃的", "無関心・他人行儀",
 ]
-# (▲▲▲【更新】ここまで ▲▲▲)
 
 
 flat_content_categories = [item for sublist in CONTENT_CATEGORIES.values() for item in sublist]
@@ -222,58 +221,72 @@ def analyze_posts_batch(texts: list[str]):
     if not texts:
         return []
 
-    formatted_texts = "\n".join(f"投稿{i+1}:\n---\n{text}\n---" for i, text in enumerate(texts))
+    # インデントエラー回避のため、ここで改行とバックスラッシュをエスケープ
+    formatted_texts = "\\n".join(f"投稿{i+1}:\\n---\\n{text}\\n---" for i, text in enumerate(texts))
 
-    # ▼▼▼【変更】Few-shotプロンプティングを新しいカテゴリ定義に更新 ▼▼▼
+    # ▼▼▼【変更】プロンプトに各カテゴリの役割と排他性を強調（インデント修正済み） ▼▼▼
     prompt = f"""
-    以下のSNS投稿リスト（{len(texts)}件）を分析し、3つの軸で最も適切なカテゴリを1つずつ選択してください。
-    回答は、JSONオブジェクトのリスト形式で、投稿の順番通りに出力してください。
+以下のSNS投稿リスト（{len(texts)}件）を分析し、3つの軸で最も適切なカテゴリを1つずつ選択してください。
+回答は、JSONオブジェクトのリスト形式で、投稿の順番通りに出力してください。
 
-    # 分析の軸:
-    1. content_category: 投稿の主要な内容 (Yahoo!知恵袋ベース)
-    2. expression_category: 投稿全体の感情的な表現 (プルチックの感情の輪ベース)
-    3. style_stance_category: 投稿の文体やスタンス (書き手のスタンスベース)
+# 分析の軸と目的:
+1. content_category: 投稿の主要な内容（話題）。
+2. expression_category: 投稿全体の**純粋な感情的な表現**（喜び、悲しみなど）。**文体やスタンスは選択しないでください。**
+3. style_stance_category: 投稿の**文体や書き手のスタンス**（丁寧さ、攻撃性、独白など）。**感情を直接表す言葉は選択しないでください。**
 
-    # カテゴリリスト (必ずこの中から選択):
-    - "content_category": {flat_content_categories}
-    - "expression_category": {EXPRESSION_CATEGORIES}
-    - "style_stance_category": {STYLE_STANCE_CATEGORIES}
+# カテゴリリスト (必ずこの中から選択):
+- "content_category": {flat_content_categories}
+- "expression_category": {EXPRESSION_CATEGORIES}
+- "style_stance_category": {STYLE_STANCE_CATEGORIES}
 
-    # 分類例 (このような形式で分類してください):
-    - 投稿例: 「新しいプロジェクトが無事完了！チームのみんな、本当にお疲れ様でした！最高のメンバーに感謝！」
-      - "content_category": "職業"
-      - "expression_category": "喜び"
-      - "style_stance_category": "親しみを込めた"
-    - 投稿例: 「今日のランチはパスタ。まあまあ美味しかった。」
-      - "content_category": "料理、レシピ"
-      - "expression_category": "平穏"
-      - "style_stance_category": "丁寧・中立"
-    - 投稿例: 「なんでいつもこうなるの？本当にありえない。もう我慢の限界。」
-      - "content_category": "恋愛相談、人間関係の悩み"
-      - "expression_category": "激怒"
-      - "style_stance_category": "挑発的・攻撃的"
-    - 投稿例: 「お前バカだなｗそんなことも知らんのか」
-      - "content_category": "雑談"
-      - "expression_category": "嫌悪"
-      - "style_stance_category": "上から目線"
+# 分類例:
+- 投稿例: 「新しいプロジェクトが無事完了！チームのみんな、本当にお疲れ様でした！最高のメンバーに感謝！」
+  - "content_category": "職業"
+  - "expression_category": "喜び"
+  - "style_stance_category": "親しみを込めた"
+- 投稿例: 「今日のランチはパスタ。まあまあ美味しかった。」
+  - "content_category": "料理、レシピ"
+  - "expression_category": "平穏"
+  - "style_stance_category": "丁寧・中立"
+- 投稿例: 「なんでいつもこうなるの？本当にありえない。もう我慢の限界。」
+  - "content_category": "恋愛相談、人間関係の悩み"
+  - "expression_category": "激怒"
+  - "style_stance_category": "挑発的・攻撃的"
+- 投稿例: 「お前バカだなｗそんなことも知らんのか」
+  - "content_category": "雑談"
+  - "expression_category": "嫌悪"
+  - "style_stance_category": "上から目線"
+- 投稿例: 「お腹すいたな…。今日の夕飯何にしよう。」
+  - "content_category": "雑談"
+  - "expression_category": "平穏"
+  - "style_stance_category": "独り言・独白"
+- 投稿例: 「財布忘れて家出たことに駅で気づいた時の絶望感よ。サザエさんか私は。」
+  - "content_category": "ユーモア、ネタ"
+  - "expression_category": "悲しみ"
+  - "style_stance_category": "ユーモア・ネタ"
+- 投稿例: 「待って無理しんどい！！！推しのビジュが良すぎて爆発した†┏┛墓┗┓†」
+  - "content_category": "アニメ、コミック"
+  - "expression_category": "恍惚"
+  - "style_stance_category": "情熱・熱狂"
 
-    # 制約（絶対に守ってください）:
-    - 必ず投稿{len(texts)}件分、つまり{len(texts)}個のJSONオブジェクトをリストに入れて返してください。
-    - 分析が困難な場合でも、カテゴリを「その他」や「その他・分類不能」として必ずオブジェクトを作成してください。
-    - 回答はJSONリストのみとし、説明文は一切含めないでください。
-    - 各JSONオブジェクトには3つのキー（content_category, expression_category, style_stance_category）を必ず含めてください。
-    - **最終出力の前に、生成したJSONオブジェクトの数が{len(texts)}個であることを必ず確認してください。数が違う場合は、リストを修正して{len(texts)}個にしてください。**
+# 制約（絶対に守ってください）:
+- "expression_category"には、"style_stance_category"にリストされているカテゴリ（「独り言・独白」「ユーモア・ネタ」「情熱・熱狂」「丁寧・中立」など）は**絶対に選択しないでください**。
+- "style_stance_category"には、プルチックの感情の輪に基づく純粋な感情（「喜び」「悲しみ」「怒り」など）は**絶対に選択しないでください**。
+- 必ず投稿{len(texts)}件分、つまり{len(texts)}個のJSONオブジェクトをリストに入れて返してください。
+- 分析が困難な場合でも、カテゴリを「その他」や「その他・分類不能」として必ずオブジェクトを作成してください。
+- 回答はJSONリストのみとし、説明文は一切含めないでください。
+- 各JSONオブジェクトには3つのキー（content_category, expression_category, style_stance_category）を必ず含めてください。
+- **最終出力の前に、生成したJSONオブジェクトの数が{len(texts)}個であることを必ず確認してください。数が違う場合は、リストを修正して{len(texts)}個にしてください。**
 
-    # 投稿リスト:
-    {formatted_texts}
+# 投稿リスト:
+{formatted_texts}
 
-    # 出力形式 (JSONリスト):
-    [
-      {{"content_category": "...", "expression_category": "...", "style_stance_category": "..."}},
-      ...
-    ]
-    """
-    # (▲▲▲【変更】ここまで ▲▲▲)
+# 出力形式 (JSONリスト):
+[
+  {{"content_category": "...", "expression_category": "...", "style_stance_category": "..."}},
+  ...
+]
+"""
     
     try:
         response = model.generate_content(prompt)

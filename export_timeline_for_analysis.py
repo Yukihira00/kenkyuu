@@ -56,7 +56,7 @@ def fetch_and_export_timeline():
         print(f"Blueskyへのログインに失敗しました: {e}")
         return
     
-    TARGET_ADD_COUNT = 200
+    TARGET_ADD_COUNT = 100
     print(f"Blueskyから新しい日本語の投稿を検索しています... (目標追加数: {TARGET_ADD_COUNT}件)")
     
     new_feed = [] # ここには PostView が入る
