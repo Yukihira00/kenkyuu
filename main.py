@@ -155,14 +155,16 @@ async def show_timeline(request: Request):
                     level = 'high' if user_scores.get(trait.lower(), 0) >= 3.0 else 'low'
                     rule = rules[level]
                     
-                    # ▼▼▼【修正】フィルタリング強度に応じたルールを適用 ▼▼▼
                     categories_to_hide = rule['categories'].get(strength, [])
                     
+                    # ▼▼▼【修正】content_categoryもサポートするように変更 ▼▼▼
                     category_key = ""
                     if rule['type'] == 'style':
                         category_key = 'style_stance_category'
                     elif rule['type'] == 'expression':
                         category_key = 'expression_category'
+                    elif rule['type'] == 'content':
+                        category_key = 'content_category'
 
                     if category_key:
                         post_category = analysis_result.get(category_key)
