@@ -6,6 +6,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="/static/style.css">
     <style>
+        /* Loading Spinner */
+        .loader-container {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 3rem 0;
+        }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 4px solid rgba(0,0,0,0.1);
+            border-left-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 1rem;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        
         /* timeline.html固有のスタイル */
         .feedback-section-after-reveal { margin-top: 15px; padding: 15px; border-top: 1px solid var(--border-color); text-align: center; background-color: #f8f9fa; }
         .feedback-question { font-size: 0.9em; color: var(--text-color); margin-bottom: 8px; }
@@ -39,7 +54,6 @@
         .analysis-details p { margin: 0 0 5px 0; }
         .analysis-details strong { color: var(--primary-color-dark); }
 
-        /* ▼▼▼【変更箇所】モーダル関連のスタイルを共通化・調整 ▼▼▼ */
         .modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background-color: rgba(0, 0, 0, 0.5);
@@ -58,6 +72,35 @@
         .modal-box p { margin-top: 0; margin-bottom: 1.5rem; font-size: 1.1em; }
 
         .modal-buttons { display: flex; justify-content: center; gap: 1rem; }
+        
+        .reload-section {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+        .reload-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.8rem 2rem;
+            background-color: var(--card-background-color);
+            border: 1px solid var(--primary-color);
+            color: var(--primary-color);
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .reload-btn:hover {
+            background-color: var(--primary-color);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .reload-btn svg {
+            width: 18px;
+            height: 18px;
+        }
     </style>
 </head>
 <body>
@@ -76,89 +119,20 @@
             </div>
         </div>
 
-        {% if total_post_count > 0 %}
-            <div class="card" style="text-align: center; margin-bottom: 1.5rem; padding: 1rem;">
-                <p style="margin: 0;"><strong>{{ total_post_count }}</strong>件中<strong>{{ hidden_post_count }}</strong>件の投稿がフィルターによって非表示にされています。</p>
+        <div id="timeline-container">
+            <div class="reload-section">
+                <button id="reload-timeline-btn" class="reload-btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                    新しい投稿を読み込む
+                </button>
             </div>
-        {% endif %}
-        
-        {% if feed %}
-            {% for item in feed %}
-                <div class="post-mosaic-container" id="post-container-{{ item.post.uri }}">
-                    {% if item.is_mosaic %}
-                    <div class="reveal-overlay">
-                        <button class="btn btn-primary reveal-button" style="margin-bottom: 1rem;">投稿を表示する</button>
-                        {% if item.analysis_info %}
-                        <div style="background: rgba(255,255,255,0.8); padding: 0.8rem; border-radius: 8px; text-align: center;">
-                            <strong style="color: var(--primary-color-dark); display: block; margin-bottom: 0.3rem;">非表示理由 ({{ item.analysis_info.type }})</strong>
-                            <span>{{ item.analysis_info.category }}</span>
-                        </div>
-                        {% endif %}
-                    </div>
-                    {% endif %}
-                    <div class="post {% if item.is_mosaic %}post-content-hidden{% endif %}">
-                        <div class="post-header">
-                            <div class="author-section">
-                                <img src="{{ item.post.author.avatar }}" alt="avatar" class="post-avatar">
-                                <div class="post-author-info">
-                                    <strong class="post-author">{{ item.post.author.display_name }}</strong>
-                                    <span class="post-handle">@{{ item.post.author.handle }}</span>
-                                </div>
-                            </div>
-                            <div class="post-menu">
-                                <button class="post-menu-btn" data-uri="{{ item.post.uri }}">…</button>
-                                <div class="analysis-popup" id="popup-{{ item.post.uri }}">
-                                    {% set post_analysis = analysis_results.get(item.post.uri) %}
-                                    {% if post_analysis %}
-                                        <div class="popup-item analysis-header">
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
-                                            <span>AIによる投稿分析</span>
-                                        </div>
-                                        <div class="analysis-details" style="display: none;">
-                                            <p><strong>コンテンツ:</strong> {{ post_analysis.content_category }}</p>
-                                            <p><strong>表現:</strong> {{ post_analysis.expression_category }}</p>
-                                            <p><strong>スタイル:</strong> {{ post_analysis.style_stance_category }}</p>
-                                        </div>
-                                        <button class="popup-item unpleasant-btn" data-uri="{{ item.post.uri }}">
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
-                                            <span>不快に感じた</span>
-                                        </button>
-                                    {% else %}
-                                        <div class="popup-item" style="cursor: default; color: var(--text-color-light);">
-                                            <span>分析情報がありません</span>
-                                        </div>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-                        <div class="post-content">{{ item.post.record.text }}</div>
-                        {% if item.post.embed and item.post.embed.py_type == 'app.bsky.embed.images#view' %}
-                        <div class="post-images">
-                            {% for image in item.post.embed.images %}
-                            <a href="{{ image.fullsize }}" target="_blank"><img src="{{ image.thumb }}" alt="投稿画像"></a>
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                        <div class="post-footer">{{ item.post.indexed_at.strftime('%Y-%m-%d %H:%M') }}</div>
 
-                        {% if item.is_mosaic and item.analysis_info.type != "不快な投稿" %}
-                        <div class="feedback-section-after-reveal" style="display: none;" 
-                             data-uri="{{ item.post.uri }}" 
-                             data-filter-type="{{ item.analysis_info.type }}">
-                            <p class="feedback-question">この投稿の非表示は適切でしたか？</p>
-                            <div class="feedback-buttons">
-                                <button class="feedback-btn correct" data-feedback="correct">はい、適切でした</button>
-                                <button class="feedback-btn incorrect" data-feedback="incorrect">いいえ、表示して良い</button>
-                            </div>
-                            <p class="feedback-thanks">フィードバックありがとうございます！</p>
-                        </div>
-                        {% endif %}
-                    </div>
-                </div>
-            {% endfor %}
-        {% else %}
-            <div class="card"><p>タイムラインの読み込みに失敗したか、表示できる投稿がありません。</p></div>
-        {% endif %}
+            <div id="initial-loader" class="loader-container">
+                <div class="spinner"></div>
+                <p>タイムラインを分析・読み込み中...</p>
+            </div>
+            <div id="feed-content"></div>
+        </div>
     </div>
 
     <div id="custom-alert-overlay" class="modal-overlay">
@@ -180,60 +154,119 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // ▼▼▼【変更箇所】モーダル関連のJavaScriptを全面的に修正 ▼▼▼
-            const alertOverlay = document.getElementById('custom-alert-overlay');
-            const alertOkBtn = document.getElementById('custom-alert-ok-btn');
-            const confirmOverlay = document.getElementById('custom-confirm-overlay');
-            const confirmYesBtn = document.getElementById('custom-confirm-yes-btn');
-            const confirmNoBtn = document.getElementById('custom-confirm-no-btn');
+            const feedContent = document.getElementById('feed-content');
+            const initialLoader = document.getElementById('initial-loader');
+            const reloadBtn = document.getElementById('reload-timeline-btn');
 
-            // --- 通知モーダルの制御 ---
-            function showCustomAlert(message) {
-                document.getElementById('custom-alert-message').textContent = message;
-                alertOverlay.style.display = 'flex';
-                setTimeout(() => alertOverlay.classList.add('show'), 10);
-            }
-            function hideCustomAlert() {
-                alertOverlay.classList.remove('show');
-                setTimeout(() => alertOverlay.style.display = 'none', 300);
-            }
-            if (alertOkBtn) alertOkBtn.addEventListener('click', hideCustomAlert);
-            if (alertOverlay) alertOverlay.addEventListener('click', (e) => e.target === alertOverlay && hideCustomAlert());
-            
-            // --- 確認モーダルの制御 ---
-            let confirmCallback = null;
-            function showCustomConfirm(message, callback) {
-                document.getElementById('custom-confirm-message').textContent = message;
-                confirmCallback = callback;
-                confirmOverlay.style.display = 'flex';
-                setTimeout(() => confirmOverlay.classList.add('show'), 10);
-            }
-            function hideCustomConfirm() {
-                confirmOverlay.classList.remove('show');
-                setTimeout(() => confirmOverlay.style.display = 'none', 300);
-            }
-            if (confirmNoBtn) confirmNoBtn.addEventListener('click', hideCustomConfirm);
-            if (confirmOverlay) confirmOverlay.addEventListener('click', (e) => e.target === confirmOverlay && hideCustomConfirm());
-            if (confirmYesBtn) {
-                confirmYesBtn.addEventListener('click', () => {
-                    if (confirmCallback) {
-                        confirmCallback();
-                    }
-                    hideCustomConfirm();
-                });
-            }
-            
-            // --- 既存のイベントリスナー ---
-            const menuBtn = document.getElementById('menu-btn');
-            const navLinks = document.getElementById('nav-links');
-            if(menuBtn && navLinks) {
-                menuBtn.addEventListener('click', () => navLinks.classList.toggle('open'));
+            // --- タイムライン読み込み関数 ---
+            // isPrepend: trueなら上に追加（リロード時）、falseなら下に追加（初期読み込み時）
+            function loadTimeline(cursor = null, isPrepend = false) {
+                let url = '/timeline_content';
+                if (cursor) {
+                    url += `?cursor=${encodeURIComponent(cursor)}`;
+                }
+                
+                // リロード中はボタンの見た目を変える
+                if (!cursor && reloadBtn) {
+                    reloadBtn.disabled = true;
+                    reloadBtn.style.opacity = '0.7';
+                    reloadBtn.innerHTML = '<div class="spinner" style="width:16px; height:16px; border-width:2px; display:inline-block; margin-bottom:0; margin-right:5px; vertical-align:middle;"></div> 読み込み中...';
+                }
+
+                fetch(url)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        return response.text();
+                    })
+                    .then(html => {
+                        // 初期ローダーを消す
+                        if (initialLoader) initialLoader.style.display = 'none';
+
+                        // リロードボタンを元に戻す
+                        if (!cursor && reloadBtn) {
+                            reloadBtn.disabled = false;
+                            reloadBtn.style.opacity = '1';
+                            reloadBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg> 新しい投稿を読み込む';
+                        }
+
+                        // 下部の「もっと見る」ボタンが含まれている場合削除 (下方向への読み込みは無効化するため)
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = html;
+                        const existingMoreBtn = tempDiv.querySelector('.load-more-container');
+                        if (existingMoreBtn) {
+                            existingMoreBtn.remove();
+                        }
+                        
+                        // 取得したHTMLに投稿が含まれているか確認
+                        const newPosts = tempDiv.querySelectorAll('.post-mosaic-container');
+
+                        // 重複チェック用（既に表示されている投稿IDのセットを作成）
+                        const existingIds = new Set();
+                        document.querySelectorAll('.post-mosaic-container').forEach(el => {
+                            existingIds.add(el.id);
+                        });
+
+                        // 重複していない投稿だけを抽出
+                        const fragment = document.createDocumentFragment();
+                        let newCount = 0;
+                        newPosts.forEach(post => {
+                            if (!existingIds.has(post.id)) {
+                                fragment.appendChild(post);
+                                newCount++;
+                            }
+                        });
+
+                        if (newCount > 0) {
+                            if (isPrepend) {
+                                // 上に追加（リロード時）
+                                feedContent.prepend(fragment);
+                                showCustomAlert(`${newCount}件の新しい投稿を読み込みました`);
+                            } else {
+                                // 下に追加（初期読み込み時）
+                                feedContent.appendChild(fragment);
+                            }
+                        } else if (isPrepend) {
+                            showCustomAlert('新しい投稿はありませんでした');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading timeline:', error);
+                        if (initialLoader && initialLoader.style.display !== 'none') {
+                            initialLoader.innerHTML = `<p style="color:var(--accent-color-red); font-weight:bold;">読み込みに失敗しました。</p><p style="font-size:0.9em; color:#666;">${error.message}</p><button class="btn btn-secondary" onclick="location.reload()">ページを再読み込み</button>`;
+                        } else {
+                            showCustomAlert('読み込みに失敗しました: ' + error.message);
+                        }
+                        
+                        if (reloadBtn) {
+                            reloadBtn.disabled = false;
+                            reloadBtn.style.opacity = '1';
+                            reloadBtn.innerHTML = '読み込み失敗（再試行）';
+                        }
+                    });
             }
 
-            document.querySelectorAll('.reveal-button').forEach(button => {
-                button.addEventListener('click', function() {
-                    const container = this.closest('.post-mosaic-container');
-                    const overlay = this.closest('.reveal-overlay');
+            // ▼▼▼ 変更: 優先度を下げるため、メインスレッドが空いてから実行 ▼▼▼
+            if ('requestIdleCallback' in window) {
+                requestIdleCallback(() => loadTimeline(null, false));
+            } else {
+                setTimeout(() => loadTimeline(null, false), 100);
+            }
+
+            // --- イベントハンドリング ---
+            document.addEventListener('click', function(e) {
+                // 0. トップのリロードボタン（上に追加）
+                if (e.target.closest('#reload-timeline-btn')) {
+                    // 既存のコンテンツは消さない
+                    loadTimeline(null, true);
+                    return;
+                }
+
+                // 2. 投稿を表示する（Reveal）ボタン
+                if (e.target.matches('.reveal-button')) {
+                    const container = e.target.closest('.post-mosaic-container');
+                    const overlay = e.target.closest('.reveal-overlay');
                     const postContent = container.querySelector('.post-content-hidden');
                     if (overlay && postContent) {
                         overlay.classList.add('hidden');
@@ -243,14 +276,13 @@
                             feedbackSection.style.display = 'block';
                         }
                     }
-                });
-            });
+                    return;
+                }
 
-            const postMenuBtns = document.querySelectorAll('.post-menu-btn');
-            postMenuBtns.forEach(btn => {
-                btn.addEventListener('click', (event) => {
-                    event.stopPropagation();
-                    const uri = btn.dataset.uri;
+                // 3. ポップアップメニューボタン
+                if (e.target.matches('.post-menu-btn')) {
+                    e.stopPropagation();
+                    const uri = e.target.dataset.uri;
                     const popup = document.getElementById(`popup-${uri}`);
                     document.querySelectorAll('.analysis-popup.show').forEach(p => {
                         if (p !== popup) {
@@ -260,19 +292,28 @@
                         }
                     });
                     if (popup) popup.classList.toggle('show');
-                });
-            });
-            
-            // ▼▼▼【変更箇所】「不快に感じた」ボタンの処理を、確認モーダルを出すように変更 ▼▼▼
-            document.querySelectorAll('.unpleasant-btn').forEach(button => {
-                button.addEventListener('click', function(event) {
-                    event.stopPropagation();
-                    const uri = this.dataset.uri;
+                    return;
+                }
+
+                // 4. 分析詳細ヘッダー
+                if (e.target.closest('.analysis-header')) {
+                    e.stopPropagation();
+                    const container = e.target.closest('.analysis-popup');
+                    const detailsDiv = container.querySelector('.analysis-details');
+                    if (detailsDiv) {
+                        detailsDiv.style.display = (detailsDiv.style.display === 'none') ? 'block' : 'none';
+                    }
+                    return;
+                }
+
+                // 5. 不快ボタン
+                if (e.target.closest('.unpleasant-btn')) {
+                    e.stopPropagation();
+                    const btn = e.target.closest('.unpleasant-btn');
+                    const uri = btn.dataset.uri;
                     const postContainer = document.getElementById(`post-container-${uri}`);
                     
-                    // 確認モーダルを表示
                     showCustomConfirm('この投稿を不快な投稿として報告しますか？', () => {
-                        // 「はい」が押された時の処理
                         fetch('/report_unpleasant', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -295,10 +336,6 @@
                                             </div>
                                         `;
                                         postContainer.prepend(overlay);
-                                        overlay.querySelector('.reveal-button').addEventListener('click', function() {
-                                            overlay.classList.add('hidden');
-                                            postContainer.querySelector('.post').classList.remove('post-content-hidden');
-                                        });
                                     }
                                     postContainer.querySelector('.post').classList.add('post-content-hidden');
                                 }
@@ -308,17 +345,17 @@
                         });
                     });
 
-                    const popup = this.closest('.analysis-popup');
+                    const popup = btn.closest('.analysis-popup');
                     if (popup) popup.classList.remove('show');
-                });
-            });
+                    return;
+                }
 
-            document.querySelectorAll('.feedback-btn').forEach(button => {
-                button.addEventListener('click', function() {
-                    const feedbackSection = this.closest('.feedback-section-after-reveal');
+                // 6. フィルターフィードバックボタン
+                if (e.target.matches('.feedback-btn')) {
+                    const feedbackSection = e.target.closest('.feedback-section-after-reveal');
                     const uri = feedbackSection.dataset.uri;
                     const filter_type = feedbackSection.dataset.filterType;
-                    const feedback = this.dataset.feedback;
+                    const feedback = e.target.dataset.feedback;
 
                     fetch('/report_filter_feedback', {
                         method: 'POST',
@@ -335,29 +372,11 @@
                             showCustomAlert('フィードバックの送信に失敗しました。');
                         }
                     });
-                });
-            });
-            
-            document.querySelectorAll('.analysis-header').forEach(header => {
-                header.addEventListener('click', function(event) {
-                    event.stopPropagation();
-                    const container = this.closest('.analysis-popup');
-                    const detailsDiv = container.querySelector('.analysis-details');
-                    if (detailsDiv) {
-                        detailsDiv.style.display = (detailsDiv.style.display === 'none') ? 'block' : 'none';
-                    }
-                });
-            });
-
-            document.addEventListener('click', (event) => {
-                if(menuBtn && navLinks) {
-                    const isClickInsideMenu = menuBtn.contains(event.target) || navLinks.contains(event.target);
-                    if (!isClickInsideMenu && navLinks.classList.contains('open')) {
-                        navLinks.classList.remove('open');
-                    }
+                    return;
                 }
-                const isClickInsidePopup = event.target.closest('.analysis-popup');
-                const isClickInsideMenuBtn = event.target.closest('.post-menu-btn');
+
+                const isClickInsidePopup = e.target.closest('.analysis-popup');
+                const isClickInsideMenuBtn = e.target.closest('.post-menu-btn');
                 if (!isClickInsidePopup && !isClickInsideMenuBtn) {
                     document.querySelectorAll('.analysis-popup.show').forEach(p => {
                         p.classList.remove('show');
@@ -366,6 +385,59 @@
                     });
                 }
             });
+
+            // --- モーダル制御系 ---
+            const alertOverlay = document.getElementById('custom-alert-overlay');
+            const alertOkBtn = document.getElementById('custom-alert-ok-btn');
+            const confirmOverlay = document.getElementById('custom-confirm-overlay');
+            const confirmYesBtn = document.getElementById('custom-confirm-yes-btn');
+            const confirmNoBtn = document.getElementById('custom-confirm-no-btn');
+
+            function showCustomAlert(message) {
+                document.getElementById('custom-alert-message').textContent = message;
+                alertOverlay.style.display = 'flex';
+                setTimeout(() => alertOverlay.classList.add('show'), 10);
+            }
+            function hideCustomAlert() {
+                alertOverlay.classList.remove('show');
+                setTimeout(() => alertOverlay.style.display = 'none', 300);
+            }
+            if (alertOkBtn) alertOkBtn.addEventListener('click', hideCustomAlert);
+            if (alertOverlay) alertOverlay.addEventListener('click', (e) => e.target === alertOverlay && hideCustomAlert());
+            
+            let confirmCallback = null;
+            function showCustomConfirm(message, callback) {
+                document.getElementById('custom-confirm-message').textContent = message;
+                confirmCallback = callback;
+                confirmOverlay.style.display = 'flex';
+                setTimeout(() => confirmOverlay.classList.add('show'), 10);
+            }
+            function hideCustomConfirm() {
+                confirmOverlay.classList.remove('show');
+                setTimeout(() => confirmOverlay.style.display = 'none', 300);
+            }
+            if (confirmNoBtn) confirmNoBtn.addEventListener('click', hideCustomConfirm);
+            if (confirmOverlay) confirmOverlay.addEventListener('click', (e) => e.target === confirmOverlay && hideCustomConfirm());
+            if (confirmYesBtn) {
+                confirmYesBtn.addEventListener('click', () => {
+                    if (confirmCallback) confirmCallback();
+                    hideCustomConfirm();
+                });
+            }
+
+            const menuBtn = document.getElementById('menu-btn');
+            const navLinks = document.getElementById('nav-links');
+            if(menuBtn && navLinks) {
+                menuBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    navLinks.classList.toggle('open');
+                });
+                document.addEventListener('click', (e) => {
+                    if (!menuBtn.contains(e.target) && !navLinks.contains(e.target)) {
+                        navLinks.classList.remove('open');
+                    }
+                });
+            }
         });
     </script>
 </body>

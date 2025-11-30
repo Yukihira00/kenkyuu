@@ -1,0 +1,87 @@
+{# templates/timeline_items.html #}
+
+{% if total_post_count > 0 %}
+<div class="card batch-info" style="text-align: center; margin-bottom: 1.5rem; padding: 1rem;">
+    <p style="margin: 0;">このページの<strong>{{ total_post_count }}</strong>件中、<strong>{{ hidden_post_count }}</strong>件の投稿をフィルターしました。</p>
+</div>
+{% endif %}
+
+{% for item in feed %}
+<div class="post-mosaic-container" id="post-container-{{ item.post.uri }}">
+    {% if item.is_mosaic %}
+    <div class="reveal-overlay">
+        <button class="btn btn-primary reveal-button" style="margin-bottom: 1rem;">投稿を表示する</button>
+        {% if item.analysis_info %}
+        <div style="background: rgba(255,255,255,0.8); padding: 0.8rem; border-radius: 8px; text-align: center;">
+            <strong style="color: var(--primary-color-dark); display: block; margin-bottom: 0.3rem;">非表示理由 ({{ item.analysis_info.type }})</strong>
+            <span>{{ item.analysis_info.category }}</span>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+    <div class="post {% if item.is_mosaic %}post-content-hidden{% endif %}">
+        <div class="post-header">
+            <div class="author-section">
+                <img src="{{ item.post.author.avatar }}" alt="avatar" class="post-avatar">
+                <div class="post-author-info">
+                    <strong class="post-author">{{ item.post.author.display_name }}</strong>
+                    <span class="post-handle">@{{ item.post.author.handle }}</span>
+                </div>
+            </div>
+            <div class="post-menu">
+                <button class="post-menu-btn" data-uri="{{ item.post.uri }}">…</button>
+                <div class="analysis-popup" id="popup-{{ item.post.uri }}">
+                    {% set post_analysis = analysis_results.get(item.post.uri) %}
+                    {% if post_analysis %}
+                        <div class="popup-item analysis-header">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                            <span>AIによる投稿分析</span>
+                        </div>
+                        <div class="analysis-details" style="display: none;">
+                            <p><strong>コンテンツ:</strong> {{ post_analysis.content_category }}</p>
+                            <p><strong>表現:</strong> {{ post_analysis.expression_category }}</p>
+                            <p><strong>スタイル:</strong> {{ post_analysis.style_stance_category }}</p>
+                        </div>
+                        <button class="popup-item unpleasant-btn" data-uri="{{ item.post.uri }}">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
+                            <span>不快に感じた</span>
+                        </button>
+                    {% else %}
+                        <div class="popup-item" style="cursor: default; color: var(--text-color-light);">
+                            <span>分析情報がありません</span>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="post-content">{{ item.post.record.text }}</div>
+        {% if item.post.embed and item.post.embed.py_type == 'app.bsky.embed.images#view' %}
+        <div class="post-images">
+            {% for image in item.post.embed.images %}
+            <a href="{{ image.fullsize }}" target="_blank"><img src="{{ image.thumb }}" alt="投稿画像"></a>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <div class="post-footer">{{ item.post.indexed_at.strftime('%Y-%m-%d %H:%M') }}</div>
+
+        {% if item.is_mosaic and item.analysis_info.type != "不快な投稿" %}
+        <div class="feedback-section-after-reveal" style="display: none;" 
+             data-uri="{{ item.post.uri }}" 
+             data-filter-type="{{ item.analysis_info.type }}">
+            <p class="feedback-question">この投稿の非表示は適切でしたか？</p>
+            <div class="feedback-buttons">
+                <button class="feedback-btn correct" data-feedback="correct">はい、適切でした</button>
+                <button class="feedback-btn incorrect" data-feedback="incorrect">いいえ、表示して良い</button>
+            </div>
+            <p class="feedback-thanks">フィードバックありがとうございます！</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+
+{% if next_cursor %}
+<div class="load-more-container" style="text-align: center; margin: 2rem 0;">
+    <button id="load-more-btn" class="btn btn-secondary" data-cursor="{{ next_cursor }}">もっと読み込む</button>
+</div>
+{% endif %}
