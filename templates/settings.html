@@ -10,11 +10,92 @@
         /* settings.html固有のスタイル */
         .axis-group { margin-bottom: 3rem; border-top: 1px solid var(--border-color); padding-top: 2rem; }
         .axis-group > h2 { font-size: 1.6em; color: var(--primary-color); padding-bottom: 0.5rem; margin-top: 0; margin-bottom: 1.5rem; display: flex; align-items: center; border: none;}
-        .category-group { margin-bottom: 1.5rem; }
-        .category-group h3 { font-size: 1.2em; color: var(--text-color); margin-bottom: 1rem; padding-left: 0.5rem; border-left: 4px solid var(--primary-color); }
-        .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.8rem; padding-left: 1rem; }
+        .category-group-details { margin-bottom: 1rem; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; background-color: #fff; }
+        .category-group-details[open] { border-color: var(--primary-color); }
+        .category-group-details summary { 
+            padding: 1rem; 
+            cursor: pointer; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            background-color: #f8f9fa;
+            transition: background-color 0.2s;
+            list-style: none; /* デフォルトの三角を消す */
+        }
+        .category-group-details summary::-webkit-details-marker { display: none; } /* Safari用 */
+        .category-group-details summary:hover { background-color: #e9ecef; }
+        
+        /* ▼▼▼ 追加: summary内のレイアウト調整 ▼▼▼ */
+        .summary-content {
+            display: flex;
+            align-items: center;
+            flex-grow: 1;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .category-group-details h3 { 
+            margin: 0; 
+            font-size: 1.1em; 
+            color: var(--text-color); 
+            display: flex; 
+            align-items: center;
+        }
+        .category-group-details h3::before {
+            content: '▶';
+            display: inline-block;
+            font-size: 0.8em;
+            margin-right: 0.8rem;
+            color: var(--text-color-light);
+            transition: transform 0.2s;
+        }
+        .category-group-details[open] h3::before { transform: rotate(90deg); }
+
+        /* ▼▼▼ 追加: 「全て選択」チェックボックスのスタイル ▼▼▼ */
+        .group-select-label {
+            font-size: 0.9em;
+            font-weight: normal;
+            color: var(--text-color);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            padding: 4px 8px;
+            background-color: rgba(255,255,255,0.6);
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        .group-select-label:hover {
+            background-color: #fff;
+            border-color: var(--primary-color);
+        }
+        .group-select-label input {
+            margin-right: 6px;
+            transform: scale(1.1);
+        }
+        
+        .selected-badge {
+            font-size: 0.85em;
+            background-color: var(--primary-color);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            margin-left: 10px;
+            display: none; /* デフォルト非表示 */
+            white-space: nowrap;
+        }
+        .checkbox-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); 
+            gap: 0.8rem; 
+            padding: 1.5rem; 
+            border-top: 1px solid var(--border-color);
+            background-color: #fff;
+        }
         .checkbox-label { display: flex; align-items: center; cursor: pointer; padding: 2px; }
         .checkbox-label input { margin-right: 0.7rem; }
+        
+        /* 既存スタイル */
         .success-message { text-align: center; color: #27ae60; font-weight: 500; margin-top: 1rem; background-color: #e9f7ef; padding: 0.8rem; border-radius: 5px; border: 1px solid #a7d7c5; }
         .switch-container { display: flex; align-items: center; justify-content: space-between; padding: 1rem; background: var(--background-color); border-radius: 8px; margin-bottom: 1rem;}
         .switch-label { font-size: 1.1em; font-weight: 500; }
@@ -63,7 +144,8 @@
                         </div>
                     </div>
                     <p style="font-size: 0.9em; color: #666; margin-top: 1rem;">
-                        この設定をオンにすると、あなたのHEXACO診断結果に基づいて、不快に感じる可能性のある投稿が自動的にモザイク表示されます。
+                        この設定をオンにすると、あなたのHEXACO診断結果に基づいて、不快に感じる可能性のある投稿が自動的にモザイク表示されます。<br>
+                        ※ 現在は「話し方・態度」と「感情表現」のみ自動調整されます。話題（コンテンツ）は下の手動設定をご利用ください。
                     </p>
                     {% if user_settings.auto_filter_enabled and active_rules %}
                     <div class="rules-display">
@@ -102,12 +184,22 @@
                 
                 <div class="axis-group">
                     <h2>コンテンツカテゴリの手動設定</h2>
-                    <p style="font-size: 0.9em; color: #666; margin-top: 1rem;">
-                        自動フィルタリングに加えて、特定のトピックの投稿を非表示にしたい場合は以下から選択してください。
+                    <p style="font-size: 0.9em; color: #666; margin-top: 1rem; margin-bottom: 1.5rem;">
+                        苦手な話題や見たくないトピックがある場合は、以下から選択してチェックを入れてください。<br>
+                        親カテゴリの「全て選択」をチェックすると、そのカテゴリ内の項目を一括で設定できます。
                     </p>
+                    
                     {% for group_name, items in all_content_categories.items() %}
-                    <div class="category-group">
-                        <h3>{{ group_name }}</h3>
+                    <details class="category-group-details" id="group-{{ loop.index }}">
+                        <summary>
+                            <div class="summary-content">
+                                <h3>{{ group_name }}</h3>
+                                <label class="group-select-label">
+                                    <input type="checkbox" class="group-selector"> 全て選択
+                                </label>
+                            </div>
+                            <span class="selected-badge">0</span>
+                        </summary>
                         <div class="checkbox-grid">
                             {% for item in items %}
                             <label class="checkbox-label">
@@ -117,7 +209,7 @@
                             </label>
                             {% endfor %}
                         </div>
-                    </div>
+                    </details>
                     {% endfor %}
                 </div>
 
@@ -137,6 +229,7 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', (event) => {
+            // スクロール位置の復元
             const scrollpos = localStorage.getItem('scrollpos');
             if (scrollpos) {
                 window.scrollTo(0, parseInt(scrollpos, 10));
@@ -148,6 +241,8 @@
                     localStorage.setItem('scrollpos', window.scrollY);
                 });
             }
+
+            // 保存成功メッセージ
             {% if save_success %}
                 const successMsg = document.getElementById('success-msg');
                 if (successMsg) {
@@ -157,6 +252,71 @@
                     }, 3000);
                 }
             {% endif %}
+
+            // カテゴリ選択ロジック（一括選択・バッジ更新）
+            const detailsList = document.querySelectorAll('.category-group-details');
+            
+            detailsList.forEach(detail => {
+                const groupSelector = detail.querySelector('.group-selector');
+                const groupLabel = detail.querySelector('.group-select-label');
+                const checkboxes = detail.querySelectorAll('input[name="hidden_content"]');
+                const badge = detail.querySelector('.selected-badge');
+                
+                // --- 関数定義 ---
+                
+                // バッジと親チェックボックスの状態を更新する関数
+                const updateState = () => {
+                    const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+                    const totalCount = checkboxes.length;
+                    
+                    // 1. バッジの更新
+                    if (checkedCount > 0) {
+                        badge.textContent = checkedCount + ' 選択中';
+                        badge.style.display = 'inline-block';
+                        detail.querySelector('summary').style.backgroundColor = '#e3f2fd'; // 選択時は薄い青背景
+                    } else {
+                        badge.style.display = 'none';
+                        detail.querySelector('summary').style.backgroundColor = '';
+                    }
+
+                    // 2. 親チェックボックスの状態更新 (全選択/一部選択/未選択)
+                    if (checkedCount === totalCount && totalCount > 0) {
+                        groupSelector.checked = true;
+                        groupSelector.indeterminate = false;
+                    } else if (checkedCount > 0) {
+                        groupSelector.checked = false;
+                        groupSelector.indeterminate = true; // 一部選択状態（横線）
+                    } else {
+                        groupSelector.checked = false;
+                        groupSelector.indeterminate = false;
+                    }
+                };
+
+                // --- イベントリスナー設定 ---
+
+                // 1. 親チェックボックス変更時（全選択・全解除）
+                groupSelector.addEventListener('change', (e) => {
+                    const isChecked = e.target.checked;
+                    checkboxes.forEach(cb => {
+                        cb.checked = isChecked;
+                    });
+                    updateState();
+                });
+                
+                // 2. 親チェックボックスクリック時のアコーディオン開閉防止
+                // (labelをクリックしてもdetailsが開閉しないようにする)
+                groupLabel.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                });
+
+                // 3. 子チェックボックス変更時
+                checkboxes.forEach(cb => {
+                    cb.addEventListener('change', updateState);
+                });
+
+                // 初期状態の反映
+                updateState();
+            });
         });
     </script>
 </body>

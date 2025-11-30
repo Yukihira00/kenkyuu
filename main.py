@@ -2,7 +2,7 @@
 from datetime import datetime
 import secrets
 from fastapi import FastAPI, Request, Form
-from fastapi.staticfiles import StaticFiles # ◀◀◀【追加】
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -20,7 +20,7 @@ import type_descriptions
 # --- アプリケーションの初期設定 ---
 app = FastAPI()
 
-# ▼▼▼【追加】staticディレクトリのマウント ▼▼▼
+# staticディレクトリのマウント
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 app.add_middleware(SessionMiddleware, secret_key=secrets.token_hex(32))
@@ -98,12 +98,13 @@ async def show_timeline(request: Request):
     
     unpleasant_vectors = database.get_unpleasant_post_vectors(user_did)
     
-    # ▼▼▼【修正】フィルタリング強度に応じて類似度の閾値を変更 ▼▼▼
     strength = user_filter_settings.get('filter_strength', 2)
     SIMILARITY_THRESHOLDS = {1: 0.85, 2: 0.75, 3: 0.65}
     SIMILARITY_THRESHOLD = SIMILARITY_THRESHOLDS.get(strength, 0.75)
 
-    raw_feed = timeline_checker.get_timeline_data(request.session['handle'], request.session['app_password'], limit=50)
+    # ▼▼▼【変更】取得件数を50から100に増量 ▼▼▼
+    raw_feed = timeline_checker.get_timeline_data(request.session['handle'], request.session['app_password'], limit=100)
+    
     if not raw_feed:
         return templates.TemplateResponse("timeline.html", {"request": request, "user": request.session, "feed": [], "hidden_post_count": 0, "total_post_count": 0, "user_settings": user_filter_settings, "analysis_results": {}})
 
@@ -151,27 +152,30 @@ async def show_timeline(request: Request):
                 item.is_mosaic = True
                 item.analysis_info = {"type": "手動フィルター", "category": analysis_result.get("content_category")}
             elif user_filter_settings.get('auto_filter_enabled') and user_scores:
-                for trait, rules in personality_descriptions.FILTERING_RULES.items():
+                for trait, rules_by_level in personality_descriptions.FILTERING_RULES.items():
                     level = 'high' if user_scores.get(trait.lower(), 0) >= 3.0 else 'low'
-                    rule = rules[level]
+                    rule_list = rules_by_level.get(level, [])
                     
-                    categories_to_hide = rule['categories'].get(strength, [])
-                    
-                    # ▼▼▼【修正】content_categoryもサポートするように変更 ▼▼▼
-                    category_key = ""
-                    if rule['type'] == 'style':
-                        category_key = 'style_stance_category'
-                    elif rule['type'] == 'expression':
-                        category_key = 'expression_category'
-                    elif rule['type'] == 'content':
-                        category_key = 'content_category'
+                    for rule in rule_list:
+                        categories_to_hide = rule['categories'].get(strength, [])
+                        category_key = ""
+                        
+                        if rule['type'] == 'style':
+                            category_key = 'style_stance_category'
+                        elif rule['type'] == 'expression':
+                            category_key = 'expression_category'
+                        elif rule['type'] == 'content':
+                            category_key = 'content_category'
 
-                    if category_key:
-                        post_category = analysis_result.get(category_key)
-                        if post_category in categories_to_hide:
-                            item.is_mosaic = True
-                            item.analysis_info = {"type": "性格診断フィルター", "category": post_category}
-                            break
+                        if category_key:
+                            post_category = analysis_result.get(category_key)
+                            if post_category in categories_to_hide:
+                                item.is_mosaic = True
+                                item.analysis_info = {"type": "性格診断フィルター", "category": post_category}
+                                break
+                    
+                    if item.is_mosaic:
+                        break
         
         if item.is_mosaic: hidden_post_count += 1
         processed_feed.append(item)
@@ -203,11 +207,19 @@ async def show_settings(request: Request):
     user_settings = database.get_user_filter_settings(user_did)
     user_scores = database.get_user_result(user_did)
     active_rules = {}
+    
     if user_scores:
         strength = user_settings.get('filter_strength', 2)
-        for trait, rules in personality_descriptions.FILTERING_RULES.items():
-            level = 'high' if user_scores[trait.lower()] >= 3.0 else 'low'
-            active_rules[rules['name']] = rules[level]['categories'].get(strength, [])
+        for trait, rules_by_level in personality_descriptions.FILTERING_RULES.items():
+            level = 'high' if user_scores.get(trait.lower(), 0) >= 3.0 else 'low'
+            rule_list = rules_by_level.get(level, [])
+            
+            merged_categories = []
+            for rule in rule_list:
+                merged_categories.extend(rule['categories'].get(strength, []))
+            
+            if merged_categories:
+                active_rules[rules_by_level['name']] = list(set(merged_categories)) # 重複排除
     
     return templates.TemplateResponse("settings.html", {"request": request, "user_settings": user_settings, "all_content_categories": llm_analyzer.CONTENT_CATEGORIES, "active_rules": active_rules})
 
@@ -219,10 +231,8 @@ async def save_settings(request: Request):
     hidden_content = form_data.getlist("hidden_content")
     auto_filter_enabled = form_data.get("auto_filter_switch") == "on"
     similarity_filter_enabled = form_data.get("similarity_filter_switch") == "on"
-    # ▼▼▼【追加】フォームから強度設定を受け取る ▼▼▼
     filter_strength = int(form_data.get("filter_strength", 2))
     
-    # ▼▼▼【修正】データベース保存処理に強度設定を渡す ▼▼▼
     database.save_user_filter_settings(
         request.session['user_did'], 
         hidden_content, 
@@ -231,16 +241,23 @@ async def save_settings(request: Request):
         filter_strength
     )
     
-    # データを再取得してテンプレートに渡す
     user_settings = database.get_user_filter_settings(request.session['user_did'])
     user_scores = database.get_user_result(request.session['user_did'])
     active_rules = {}
+    
     if user_scores:
         strength = user_settings.get('filter_strength', 2)
-        for trait, rules in personality_descriptions.FILTERING_RULES.items():
+        for trait, rules_by_level in personality_descriptions.FILTERING_RULES.items():
             level = 'high' if user_scores.get(trait.lower(), 0) >= 3.0 else 'low'
-            active_rules[rules['name']] = rules[level]['categories'].get(strength, [])
+            rule_list = rules_by_level.get(level, [])
             
+            merged_categories = []
+            for rule in rule_list:
+                merged_categories.extend(rule['categories'].get(strength, []))
+            
+            if merged_categories:
+                active_rules[rules_by_level['name']] = list(set(merged_categories))
+
     return templates.TemplateResponse("settings.html", {
         "request": request,
         "user_settings": user_settings,
@@ -252,7 +269,6 @@ async def save_settings(request: Request):
 class ReportPayload(BaseModel):
     uri: str
 
-# ▼▼▼【追加】フィルターへのフィードバックを受け取るためのAPIエンドポイント ▼▼▼
 class FeedbackPayload(BaseModel):
     uri: str
     filter_type: str

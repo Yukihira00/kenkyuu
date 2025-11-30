@@ -24,7 +24,7 @@ body {
     margin: 0;
     padding: 1rem;
     -webkit-tap-highlight-color: transparent; /* スマホタップ時のハイライトを無効化 */
-    caret-color: transparent; /* ▼▼▼【追加】テキストカーソルを非表示にする ▼▼▼ */
+    caret-color: transparent; /* テキストカーソルを非表示にする */
 }
 
 .container {
