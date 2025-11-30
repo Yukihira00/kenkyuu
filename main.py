@@ -83,7 +83,7 @@ async def show_timeline(request: Request):
     return templates.TemplateResponse("timeline.html", {"request": request, "user": request.session})
 
 @app.get("/timeline_content", response_class=HTMLResponse)
-async def get_timeline_content(request: Request, cursor: str = None):
+async def get_timeline_content(request: Request, cursor: str = None, feed_type: str = 'search'):
     if 'user_did' not in request.session: return HTMLResponse("セッション切れです。再ログインしてください。", status_code=403)
 
     user_did = request.session['user_did']
@@ -97,13 +97,14 @@ async def get_timeline_content(request: Request, cursor: str = None):
     SIMILARITY_THRESHOLDS = {1: 0.85, 2: 0.75, 3: 0.65}
     SIMILARITY_THRESHOLD = SIMILARITY_THRESHOLDS.get(strength, 0.75)
 
-    # ▼▼▼ 修正: タイムライン取得を非同期スレッドで実行し、サーバー全体をブロックしないようにする ▼▼▼
+    # ▼▼▼ 修正: feed_type を渡すように変更 ▼▼▼
     raw_feed, next_cursor = await run_in_threadpool(
         timeline_checker.get_timeline_data,
         request.session['handle'], 
         request.session['app_password'], 
         limit=100, 
-        cursor=cursor
+        cursor=cursor,
+        feed_type=feed_type
     )
     
     if not raw_feed:
@@ -122,7 +123,6 @@ async def get_timeline_content(request: Request, cursor: str = None):
         uris_to_analyze = list(posts_to_analyze.keys())
         texts_to_analyze = list(posts_to_analyze.values())
         
-        # ▼▼▼ 修正: AI分析も非同期スレッドで実行し、他のリクエストを阻害しないようにする ▼▼▼
         llm_results = await run_in_threadpool(llm_analyzer.analyze_posts_batch, texts_to_analyze)
         
         for uri, result in zip(uris_to_analyze, llm_results):

@@ -101,6 +101,17 @@
             width: 18px;
             height: 18px;
         }
+
+        /* タブデザイン */
+        .tabs { display: flex; justify-content: center; gap: 1rem; margin-bottom: 1.5rem; }
+        .tab-btn {
+            background: none; border: none; padding: 0.8rem 1.5rem;
+            font-size: 1rem; font-weight: bold; color: var(--text-color-light);
+            cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s;
+        }
+        .tab-btn:hover { color: var(--primary-color); }
+        .tab-btn.active { color: var(--primary-color); border-bottom-color: var(--primary-color); }
+
     </style>
 </head>
 <body>
@@ -121,6 +132,10 @@
 
         <div id="timeline-container">
             <div class="reload-section">
+                <div class="tabs">
+                <button class="tab-btn active" data-type="search">最新の投稿</button>
+                <button class="tab-btn" data-type="timeline">フォロー中</button>
+            </div>
                 <button id="reload-timeline-btn" class="reload-btn">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
                     新しい投稿を読み込む
@@ -158,19 +173,41 @@
             const initialLoader = document.getElementById('initial-loader');
             const reloadBtn = document.getElementById('reload-timeline-btn');
 
-            // --- タイムライン読み込み関数 ---
-            // isPrepend: trueなら上に追加（リロード時）、falseなら下に追加（初期読み込み時）
+// 現在のフィードタイプ（デフォルトはsearch）
+            let currentFeedType = 'search';
+
+            // タブ切り替えイベント
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    if (btn.classList.contains('active')) return;
+                    
+                    // タブの見た目更新
+                    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    
+                    // 状態更新と再読み込み
+                    currentFeedType = btn.dataset.type;
+                    feedContent.innerHTML = ''; 
+                    const statsPlaceholder = document.getElementById('filter-stats-placeholder');
+                    if(statsPlaceholder) statsPlaceholder.innerHTML = ''; // 統計クリア
+                    
+                    if (initialLoader) initialLoader.style.display = 'flex';
+                    
+                    loadTimeline(null, false);
+                });
+            });
+
+            // タイムライン読み込み関数
+           // タイムライン読み込み関数
             function loadTimeline(cursor = null, isPrepend = false) {
-                let url = '/timeline_content';
+                let url = `/timeline_content?feed_type=${currentFeedType}`;
                 if (cursor) {
-                    url += `?cursor=${encodeURIComponent(cursor)}`;
+                    url += `&cursor=${encodeURIComponent(cursor)}`;
                 }
                 
-                // リロード中はボタンの見た目を変える
+                // ▼▼▼ 変更: 読み込み中はボタンを非表示にする（非表示＝display: none） ▼▼▼
                 if (!cursor && reloadBtn) {
-                    reloadBtn.disabled = true;
-                    reloadBtn.style.opacity = '0.7';
-                    reloadBtn.innerHTML = '<div class="spinner" style="width:16px; height:16px; border-width:2px; display:inline-block; margin-bottom:0; margin-right:5px; vertical-align:middle;"></div> 読み込み中...';
+                    reloadBtn.style.display = 'none';
                 }
 
                 fetch(url)
@@ -184,31 +221,38 @@
                         // 初期ローダーを消す
                         if (initialLoader) initialLoader.style.display = 'none';
 
-                        // リロードボタンを元に戻す
+                        // ▼▼▼ 変更: 読み込み完了後にボタンを再表示 ▼▼▼
                         if (!cursor && reloadBtn) {
+                            reloadBtn.style.display = 'inline-flex';
+                            // ボタンの表示を初期状態に戻す
+                            reloadBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg> 新しい投稿を読み込む';
                             reloadBtn.disabled = false;
                             reloadBtn.style.opacity = '1';
-                            reloadBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg> 新しい投稿を読み込む';
                         }
 
-                        // 下部の「もっと見る」ボタンが含まれている場合削除 (下方向への読み込みは無効化するため)
+                        // 下部の「もっと見る」ボタン処理など（以下は以前と同じ）
                         const tempDiv = document.createElement('div');
                         tempDiv.innerHTML = html;
+                        
+                        // 統計情報の更新
+                        const batchInfo = tempDiv.querySelector('.batch-info');
+                        const statsPlaceholder = document.getElementById('filter-stats-placeholder');
+                        if (batchInfo && statsPlaceholder) {
+                            statsPlaceholder.innerHTML = ''; 
+                            statsPlaceholder.appendChild(batchInfo);
+                        }
+
                         const existingMoreBtn = tempDiv.querySelector('.load-more-container');
                         if (existingMoreBtn) {
                             existingMoreBtn.remove();
                         }
                         
-                        // 取得したHTMLに投稿が含まれているか確認
                         const newPosts = tempDiv.querySelectorAll('.post-mosaic-container');
-
-                        // 重複チェック用（既に表示されている投稿IDのセットを作成）
                         const existingIds = new Set();
                         document.querySelectorAll('.post-mosaic-container').forEach(el => {
                             existingIds.add(el.id);
                         });
 
-                        // 重複していない投稿だけを抽出
                         const fragment = document.createDocumentFragment();
                         let newCount = 0;
                         newPosts.forEach(post => {
@@ -220,11 +264,9 @@
 
                         if (newCount > 0) {
                             if (isPrepend) {
-                                // 上に追加（リロード時）
                                 feedContent.prepend(fragment);
                                 showCustomAlert(`${newCount}件の新しい投稿を読み込みました`);
                             } else {
-                                // 下に追加（初期読み込み時）
                                 feedContent.appendChild(fragment);
                             }
                         } else if (isPrepend) {
@@ -239,10 +281,12 @@
                             showCustomAlert('読み込みに失敗しました: ' + error.message);
                         }
                         
+                        // エラー時も再表示してリトライ可能にする
                         if (reloadBtn) {
+                            reloadBtn.style.display = 'inline-flex';
+                            reloadBtn.innerHTML = '読み込み失敗（再試行）';
                             reloadBtn.disabled = false;
                             reloadBtn.style.opacity = '1';
-                            reloadBtn.innerHTML = '読み込み失敗（再試行）';
                         }
                     });
             }
