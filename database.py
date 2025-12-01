@@ -165,29 +165,31 @@ def get_user_result(user_did: str):
 def get_user_filter_settings(user_did: str):
     conn = get_connection()
     cursor = conn.cursor()
-    # ▼▼▼【修正】filter_strength列を取得するように修正 ▼▼▼
-    cursor.execute("SELECT hidden_content_categories, auto_filter_enabled, similarity_filter_enabled, filter_strength FROM filter_settings WHERE user_did = %s", (user_did,))
+    # ▼ similarity_threshold を追加
+    cursor.execute("SELECT hidden_content_categories, auto_filter_enabled, similarity_filter_enabled, filter_strength, similarity_threshold FROM filter_settings WHERE user_did = %s", (user_did,))
     settings = cursor.fetchone()
     cursor.close()
     conn.close()
     if settings: return settings
-    # ▼▼▼【修正】デフォルト値にfilter_strengthを追加 ▼▼▼
-    else: return {'hidden_content_categories': [], 'auto_filter_enabled': True, 'similarity_filter_enabled': True, 'filter_strength': 2}
-
+    # ▼ デフォルト値に similarity_threshold: 0.80 を追加
+    else: return {'hidden_content_categories': [], 'auto_filter_enabled': True, 'similarity_filter_enabled': True, 'filter_strength': 2, 'similarity_threshold': 0.80}
 # ▼▼▼【修正】関数シグネチャとSQL文を修正 ▼▼▼
-def save_user_filter_settings(user_did: str, content: list[str], auto_filter: bool, similarity_filter: bool, filter_strength: int):
+def save_user_filter_settings(user_did: str, content: list[str], auto_filter: bool, similarity_filter: bool, filter_strength: int, similarity_threshold: float):
     conn = get_connection()
     cursor = conn.cursor()
     now = datetime.now()
+    # ▼ SQL文と引数に similarity_threshold を追加
     cursor.execute('''
-        INSERT INTO filter_settings (user_did, hidden_content_categories, auto_filter_enabled, similarity_filter_enabled, filter_strength, updated_at) VALUES (%s, %s, %s, %s, %s, %s)
+        INSERT INTO filter_settings (user_did, hidden_content_categories, auto_filter_enabled, similarity_filter_enabled, filter_strength, similarity_threshold, updated_at) 
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (user_did) DO UPDATE SET
             hidden_content_categories = EXCLUDED.hidden_content_categories, 
             auto_filter_enabled = EXCLUDED.auto_filter_enabled, 
             similarity_filter_enabled = EXCLUDED.similarity_filter_enabled,
             filter_strength = EXCLUDED.filter_strength,
+            similarity_threshold = EXCLUDED.similarity_threshold,
             updated_at = EXCLUDED.updated_at
-    ''', (user_did, content, auto_filter, similarity_filter, filter_strength, now))
+    ''', (user_did, content, auto_filter, similarity_filter, filter_strength, similarity_threshold, now))
     conn.commit()
     cursor.close()
     conn.close()

@@ -1,7 +1,6 @@
 # main.py
 from datetime import datetime
 import secrets
-# ▼▼▼ 追加: run_in_threadpool をインポート ▼▼▼
 from fastapi.concurrency import run_in_threadpool
 from fastapi import FastAPI, Request, Form
 from fastapi.staticfiles import StaticFiles
@@ -94,10 +93,11 @@ async def get_timeline_content(request: Request, cursor: str = None, feed_type: 
     unpleasant_vectors = database.get_unpleasant_post_vectors(user_did)
     
     strength = user_filter_settings.get('filter_strength', 2)
-    SIMILARITY_THRESHOLDS = {1: 0.85, 2: 0.75, 3: 0.65}
-    SIMILARITY_THRESHOLD = SIMILARITY_THRESHOLDS.get(strength, 0.75)
+    
+    # ▼▼▼ 変更: 固定の辞書ではなく、DBに保存されたしきい値を使用する ▼▼▼
+    # デフォルト値は0.80（database.pyのデフォルトと合わせる）
+    SIMILARITY_THRESHOLD = user_filter_settings.get('similarity_threshold', 0.80)
 
-    # ▼▼▼ 修正: feed_type を渡すように変更 ▼▼▼
     raw_feed, next_cursor = await run_in_threadpool(
         timeline_checker.get_timeline_data,
         request.session['handle'], 
@@ -230,7 +230,13 @@ async def save_settings(request: Request):
     auto_filter_enabled = form_data.get("auto_filter_switch") == "on"
     similarity_filter_enabled = form_data.get("similarity_filter_switch") == "on"
     filter_strength = int(form_data.get("filter_strength", 2))
-    database.save_user_filter_settings(request.session['user_did'], hidden_content, auto_filter_enabled, similarity_filter_enabled, filter_strength)
+    
+    # ▼▼▼ 追加: スライダーの値を取得（デフォルトは0.80） ▼▼▼
+    similarity_threshold = float(form_data.get("similarity_threshold", 0.80))
+    
+    # ▼▼▼ 変更: similarity_threshold を保存関数に渡す ▼▼▼
+    database.save_user_filter_settings(request.session['user_did'], hidden_content, auto_filter_enabled, similarity_filter_enabled, filter_strength, similarity_threshold)
+    
     user_settings = database.get_user_filter_settings(request.session['user_did'])
     user_scores = database.get_user_result(request.session['user_did'])
     active_rules = {}

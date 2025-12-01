@@ -168,7 +168,7 @@
                     {% endif %}
                 </div>
 
-                <div class="axis-group">
+<div class="axis-group">
                     <h2>類似投稿の自動フィルタリング</h2>
                     <div class="switch-container">
                         <span class="switch-label">不快報告した投稿と似ている投稿を自動で非表示にする</span>
@@ -176,6 +176,26 @@
                             <input type="checkbox" name="similarity_filter_switch" {% if user_settings.similarity_filter_enabled %}checked{% endif %}>
                             <span class="slider"></span>
                         </label>
+                    </div>
+
+                    <div style="margin-top: 1.5rem; padding: 1rem; background-color: #f8f9fa; border-radius: 8px;">
+                        <label style="font-weight: bold; display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <span>判定の厳しさ (類似度のしきい値)</span>
+                            <span id="threshold-display" style="color: var(--primary-color);">{{ user_settings.similarity_threshold | default(0.80) }}</span>
+                        </label>
+                        <input type="range" name="similarity_threshold" id="similarity-threshold" 
+                               min="0.50" max="1.00" step="0.01" 
+                               value="{{ user_settings.similarity_threshold | default(0.80) }}" 
+                               style="width: 100%; cursor: pointer;">
+                        
+                        <div style="display: flex; justify-content: space-between; font-size: 0.8em; color: #666; margin-top: 5px;">
+                            <span>0.5 (大まかに似ていれば隠す)</span>
+                            <span>1.0 (完全一致のみ隠す)</span>
+                        </div>
+                        <p style="font-size: 0.9em; color: #666; margin-top: 0.8rem;">
+                            数値が高いほど、より厳密に似ている投稿だけをフィルタリングします。<br>
+                            <strong>推奨値: 0.85 〜 0.95</strong> (誤判定が多い場合は数値を上げてください)
+                        </p>
                     </div>
                     <p style="font-size: 0.9em; color: #666; margin-top: 1rem;">
                         この設定をオンにすると、あなたが「不快に感じた」と報告した投稿と内容が似ている投稿が、AIによって自動的にモザイク表示されます。
@@ -318,6 +338,14 @@
                 updateState();
             });
         });
+        // ▼▼▼ 追加: スライダーの数値をリアルタイム表示 ▼▼▼
+            const slider = document.getElementById('similarity-threshold');
+            const display = document.getElementById('threshold-display');
+            if (slider && display) {
+                slider.addEventListener('input', (e) => {
+                    display.textContent = parseFloat(e.target.value).toFixed(2);
+                });
+            }
     </script>
 </body>
 </html>
