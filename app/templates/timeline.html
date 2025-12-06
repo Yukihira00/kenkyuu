@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="/static/style.css">
     <style>
-        /* Loading Spinner */
+        /* === Loading Spinner === */
         .loader-container {
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             padding: 3rem 0;
@@ -21,7 +21,7 @@
         }
         @keyframes spin { 100% { transform: rotate(360deg); } }
         
-        /* timeline.html固有のスタイル (既存維持) */
+        /* === 既存のタイムラインアイテム用スタイル === */
         .feedback-section-after-reveal { margin-top: 15px; padding: 15px; border-top: 1px solid var(--border-color); text-align: center; background-color: #f8f9fa; }
         .feedback-question { font-size: 0.9em; color: var(--text-color); margin-bottom: 8px; }
         .feedback-buttons { display: flex; gap: 10px; justify-content: center; }
@@ -45,7 +45,6 @@
         .popup-item { display: flex; align-items: center; gap: 0.8rem; padding: 0.7rem 0.8rem; cursor: pointer; border-radius: 6px; transition: background-color 0.2s; font-size: 0.9em; font-weight: 500; background: none; border: none; width: 100%; text-align: left; color: var(--text-color); }
         .popup-item:hover { background-color: var(--background-color); }
         .popup-item svg { width: 16px; height: 16px; stroke-width: 2; color: var(--text-color-light); }
-
         .unpleasant-btn { color: var(--accent-color-red); }
         .unpleasant-btn:hover { background-color: #fbeae8; }
         .unpleasant-btn svg { color: var(--accent-color-red); }
@@ -54,6 +53,7 @@
         .analysis-details p { margin: 0 0 5px 0; }
         .analysis-details strong { color: var(--primary-color-dark); }
 
+        /* === モーダル === */
         .modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background-color: rgba(0, 0, 0, 0.5);
@@ -61,7 +61,6 @@
             z-index: 2000; opacity: 0; transition: opacity 0.3s ease; pointer-events: none;
         }
         .modal-overlay.show { opacity: 1; pointer-events: auto; }
-
         .modal-box {
             background: white; padding: 2rem; border-radius: var(--border-radius);
             box-shadow: 0 5px 15px rgba(0,0,0,0.3); text-align: center;
@@ -70,79 +69,138 @@
         }
         .modal-overlay.show .modal-box { transform: scale(1); }
         .modal-box p { margin-top: 0; margin-bottom: 1.5rem; font-size: 1.1em; }
-
         .modal-buttons { display: flex; justify-content: center; gap: 1rem; }
-        
-        .reload-section {
-            text-align: center;
+
+        /* === New Sticky Header Design === */
+        .sticky-header {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+            margin-left: -1.5rem;
+            margin-right: -1.5rem;
+            padding: 0.8rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
             margin-bottom: 1.5rem;
         }
-        .reload-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.8rem 2rem;
-            background-color: var(--card-background-color);
-            border: 1px solid var(--primary-color);
-            color: var(--primary-color);
-            border-radius: 25px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.2s;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        }
-        .reload-btn:hover {
-            background-color: var(--primary-color);
-            color: white;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-        .reload-btn svg {
-            width: 18px;
-            height: 18px;
+        @media (max-width: 600px) {
+            .sticky-header {
+                margin-left: -1rem; margin-right: -1rem; padding: 0.8rem 1rem;
+                border-radius: 0 0 12px 12px;
+            }
         }
 
-        /* タブデザイン */
-        .tabs { display: flex; justify-content: center; gap: 1rem; margin-bottom: 1.5rem; }
-        .tab-btn {
-            background: none; border: none; padding: 0.8rem 1.5rem;
-            font-size: 1rem; font-weight: bold; color: var(--text-color-light);
-            cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s;
+        .header-top-row { display: flex; justify-content: space-between; align-items: center; }
+        .header-title {
+            margin: 0; font-size: 1.1rem; color: var(--text-color);
+            font-weight: 700; letter-spacing: 0.03em;
+            display: flex; align-items: center; gap: 0.5rem;
         }
-        .tab-btn:hover { color: var(--primary-color); }
-        .tab-btn.active { color: var(--primary-color); border-bottom-color: var(--primary-color); }
+        
+        .header-controls-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap; 
+        }
+
+        .modern-tabs { display: flex; background: rgba(0,0,0,0.04); padding: 4px; border-radius: 10px; }
+        .modern-tab-btn {
+            background: none; border: none; padding: 6px 16px;
+            font-size: 0.9em; font-weight: 600; color: var(--text-color-light);
+            cursor: pointer; border-radius: 8px; transition: all 0.2s ease;
+        }
+        .modern-tab-btn:hover { color: var(--text-color); }
+        .modern-tab-btn.active { background: white; color: var(--primary-color); box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
+
+        .controls-right {
+            display: flex; align-items: center; gap: 12px;
+            margin-left: auto; 
+        }
+
+        .filter-stats-inline {
+            font-size: 0.85em; color: var(--text-color-light); white-space: nowrap;
+        }
+        .filter-stats-inline strong { color: var(--accent-color-red); font-weight: bold; }
+
+        .icon-reload-btn {
+            background: var(--primary-color); color: white; border: none; border-radius: 20px;
+            padding: 6px 14px; font-size: 0.85em; font-weight: bold;
+            display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+            transition: all 0.2s; box-shadow: 0 2px 8px rgba(74, 144, 226, 0.3);
+            white-space: nowrap;
+        }
+        .icon-reload-btn:hover { background: var(--primary-color-dark); transform: translateY(-1px); }
+        .icon-reload-btn svg { width: 14px; height: 14px; }
+        
+        /* ハンバーガーメニュー */
+        .hamburger-menu { position: relative; }
+        .menu-btn { 
+            width: 32px; height: 32px; background: transparent; border: none; 
+            cursor: pointer; padding: 4px; display: flex; flex-direction: column; justify-content: center; gap: 5px;
+        }
+        .menu-btn span { display: block; width: 100%; height: 2px; background-color: var(--text-color); border-radius: 2px; transition: 0.3s; }
+        .nav-links.open + .menu-btn span:nth-child(1) { transform: rotate(45deg) translate(5px, 5px); }
+        .nav-links.open + .menu-btn span:nth-child(2) { opacity: 0; }
+        .nav-links.open + .menu-btn span:nth-child(3) { transform: rotate(-45deg) translate(5px, -5px); }
+
+        .nav-links { 
+            list-style: none; position: absolute; top: 45px; right: -10px; 
+            background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); 
+            margin: 0; padding: 8px; width: 220px; opacity: 0; visibility: hidden; 
+            transform: translateY(-10px); transition: all 0.2s cubic-bezier(0.165, 0.84, 0.44, 1);
+            z-index: 1001; border: 1px solid rgba(0,0,0,0.05);
+        }
+        .nav-links.open { opacity: 1; visibility: visible; transform: translateY(0); }
+        .nav-links li a { display: block; padding: 10px 16px; color: var(--text-color); text-decoration: none; font-weight: 500; border-radius: 8px; font-size: 0.95em; }
+        .nav-links li a:hover { background-color: var(--background-color); color: var(--primary-color); }
+        .nav-links .logout a { color: var(--accent-color-red); margin-top: 4px; border-top: 1px solid var(--border-color); border-radius: 0 0 8px 8px; }
+        .nav-links .logout a:hover { background-color: #fff5f5; }
 
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <div class="header-top">
-                <h1>{{ user.display_name or user.handle }}さんのタイムライン</h1>
-                <div class="hamburger-menu">
-                    <button class="menu-btn" id="menu-btn"><span></span><span></span><span></span></button>
-                    <ul class="nav-links" id="nav-links">
-                        <li><a href="/results">診断結果を見る</a></li>
-                        <li><a href="/settings">フィルター設定</a></li>
-                        <li class="logout"><a href="/logout">ログアウト</a></li>
-                    </ul>
+        
+        <div id="timeline-container">
+            <div class="sticky-header">
+                <div class="header-top-row">
+                    <h1 class="header-title">
+                        {{ user.display_name or user.handle }}
+                    </h1>
+                    <div class="hamburger-menu">
+                        <button class="menu-btn" id="menu-btn"><span></span><span></span><span></span></button>
+                        <ul class="nav-links" id="nav-links">
+                            <li><a href="/results">診断結果を見る</a></li>
+                            <li><a href="/settings">フィルター設定</a></li>
+                            <li class="logout"><a href="/logout">ログアウト</a></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="header-controls-row">
+                    <div class="modern-tabs">
+                        <button class="modern-tab-btn active" data-type="search">最新の投稿</button>
+                        <button class="modern-tab-btn" data-type="timeline">フォロー中</button>
+                    </div>
+                    
+                    <div class="controls-right">
+                        <div id="filter-stats-placeholder" class="filter-stats-inline"></div>
+                        
+                        <button id="reload-timeline-btn" class="icon-reload-btn">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                            更新
+                        </button>
+                    </div>
                 </div>
             </div>
-        </div>
-
-        <div id="timeline-container">
-            <div class="reload-section">
-                <div class="tabs">
-                <button class="tab-btn active" data-type="search">最新の投稿</button>
-                <button class="tab-btn" data-type="timeline">フォロー中</button>
-            </div>
-                <button id="reload-timeline-btn" class="reload-btn">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-                    新しい投稿を読み込む
-                </button>
-            </div>
-
-            <div id="filter-stats-placeholder"></div>
 
             <div id="initial-loader" class="loader-container">
                 <div class="spinner"></div>
@@ -173,23 +231,25 @@
             const feedContent = document.getElementById('feed-content');
             const initialLoader = document.getElementById('initial-loader');
             const reloadBtn = document.getElementById('reload-timeline-btn');
+            const statsPlaceholder = document.getElementById('filter-stats-placeholder');
             let currentFeedType = 'search';
 
+            // ★ 件数集計用の変数
+            let accTotalPosts = 0;
+            let accHiddenPosts = 0;
+
             // --- Parallel Batch Analysis Worker ---
-            // 複数のバッチを同時に処理して高速化する
+            // ★ Rate Limit対策: BATCH_SIZEを増やし、MAX_CONCURRENTを減らす
             let analysisBuffer = [];
-            const BATCH_SIZE = 5;      // 1回に20件まとめて送る（これで回数を節約）
+            const BATCH_SIZE = 10;      // 5 -> 10 に変更（リクエスト回数を減らす）
             const FLUSH_INTERVAL = 300; 
-            const MAX_CONCURRENT = 3;  // ★重要: 同時に処理するリクエスト数（これを増やすと早くなる）
+            const MAX_CONCURRENT = 4;   // 3 -> 1 に変更（同時リクエストを制限）
             let activeRequests = 0;
 
             async function processBatch() {
-                // 処理枠がいっぱい、または処理するデータがない場合は何もしない
                 if (activeRequests >= MAX_CONCURRENT || analysisBuffer.length === 0) return;
-
-                activeRequests++; // 処理枠を確保
-                const batch = analysisBuffer.splice(0, BATCH_SIZE); // 先頭から取り出し
-
+                activeRequests++; 
+                const batch = analysisBuffer.splice(0, BATCH_SIZE); 
                 const payloadItems = batch.map(task => ({ uri: task.uri, text: task.text }));
 
                 try {
@@ -198,17 +258,12 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ items: payloadItems })
                     });
-                    
                     if (!response.ok) throw new Error('Network error');
                     const data = await response.json();
-                    
                     data.results.forEach(res => {
                         const task = batch.find(t => t.uri === res.uri);
-                        if (task && res.success) {
-                            updatePostWithAnalysis(task.element, res);
-                        }
+                        if (task && res.success) updatePostWithAnalysis(task.element, res);
                     });
-
                 } catch (error) {
                     console.error("Batch Analysis failed", error);
                     batch.forEach(task => {
@@ -218,26 +273,20 @@
                          if (placeholder) placeholder.textContent = '分析エラー';
                     });
                 } finally {
-                    activeRequests--; // 処理枠を解放
-                    // すぐに次のバッチがあれば処理（待機時間なし）
-                    if (analysisBuffer.length > 0) {
-                        processBatch();
-                    }
+                    activeRequests--; 
+                    if (analysisBuffer.length > 0) processBatch();
                 }
             }
 
-            // バッファを監視して、枠が空いていれば処理を開始する
             setInterval(processBatch, FLUSH_INTERVAL);
 
             function enqueueAnalysis(element) {
                 const uri = element.dataset.uri;
                 const text = element.dataset.text;
                 analysisBuffer.push({ element, uri, text });
-                // 追加した瞬間に余裕があれば即実行
                 processBatch();
             }
 
-            // ... (以下の updatePostWithAnalysis 関数やイベントリスナーは前回と同じなのでそのまま使う) ...
             function updatePostWithAnalysis(element, data) {
                 const loadingOverlay = element.querySelector('.analyzing-overlay');
                 if (loadingOverlay) loadingOverlay.remove();
@@ -271,8 +320,6 @@
                             postContent.appendChild(fbSection);
                         }
                     }
-                    const counter = document.getElementById('filter-count');
-                    if (counter) counter.textContent = parseInt(counter.textContent || 0) + 1;
                 }
 
                 const placeholder = element.querySelector('.analysis-placeholder');
@@ -291,47 +338,62 @@
                 }
             }
 
-            // ... (これ以降の loadTimeline などのコードは前回提示した内容と同じものを維持) ...
-            
-            // タブ切り替えイベント
-            document.querySelectorAll('.tab-btn').forEach(btn => {
+            // タブ切り替え
+            document.querySelectorAll('.modern-tab-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
                     if (btn.classList.contains('active')) return;
-                    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                    document.querySelectorAll('.modern-tab-btn').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
                     currentFeedType = btn.dataset.type;
                     feedContent.innerHTML = ''; 
-                    const statsPlaceholder = document.getElementById('filter-stats-placeholder');
+                    // タブ切り替え時はカウントリセット
+                    accTotalPosts = 0;
+                    accHiddenPosts = 0;
                     if(statsPlaceholder) statsPlaceholder.innerHTML = '';
+                    
                     if (initialLoader) initialLoader.style.display = 'flex';
                     loadTimeline(null, false);
                 });
             });
 
-            // タイムライン読み込み関数
             function loadTimeline(cursor = null, isPrepend = false) {
                 let url = `/timeline_content?feed_type=${currentFeedType}`;
                 if (cursor) url += `&cursor=${encodeURIComponent(cursor)}`;
-                if (!cursor && reloadBtn) reloadBtn.style.display = 'none';
+
+                if(!cursor && reloadBtn) {
+                    reloadBtn.classList.add('loading');
+                    reloadBtn.innerHTML = '<div class="spinner" style="width:14px;height:14px;border-width:2px;margin:0;"></div> 読み込み中';
+                }
 
                 fetch(url)
                     .then(response => { if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`); return response.text(); })
                     .then(html => {
                         if (initialLoader) initialLoader.style.display = 'none';
                         if (!cursor && reloadBtn) {
-                            reloadBtn.style.display = 'inline-flex';
-                            reloadBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg> 新しい投稿を読み込む';
-                            reloadBtn.disabled = false;
+                            reloadBtn.classList.remove('loading');
+                            reloadBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg> 更新';
                         }
 
                         const tempDiv = document.createElement('div');
                         tempDiv.innerHTML = html;
                         
+                        // ★ カウントの加算ロジック
                         const batchInfo = tempDiv.querySelector('.batch-info');
-                        const statsPlaceholder = document.getElementById('filter-stats-placeholder');
-                        if (batchInfo && statsPlaceholder) {
-                            if (!isPrepend) statsPlaceholder.innerHTML = ''; 
-                            statsPlaceholder.appendChild(batchInfo);
+                        if (batchInfo) {
+                            const newTotal = parseInt(batchInfo.dataset.total || 0);
+                            const newHidden = parseInt(batchInfo.dataset.hidden || 0);
+                            
+                            if (!cursor && !isPrepend && feedContent.children.length === 0) {
+                                accTotalPosts = 0;
+                                accHiddenPosts = 0;
+                            }
+
+                            accTotalPosts += newTotal;
+                            accHiddenPosts += newHidden;
+
+                            if (accTotalPosts > 0 && statsPlaceholder) {
+                                statsPlaceholder.innerHTML = `${accTotalPosts}件中 <strong>${accHiddenPosts}件</strong> 非表示`;
+                            }
                         }
 
                         const existingMoreBtn = document.querySelector('.load-more-container');
@@ -363,7 +425,6 @@
                         
                         if (newMoreBtn && !isPrepend) feedContent.appendChild(newMoreBtn);
 
-                        // 分析キューに追加
                         postsToAnalyze.forEach(post => enqueueAnalysis(post));
                     })
                     .catch(error => {
@@ -374,9 +435,7 @@
                             showCustomAlert('読み込みに失敗しました: ' + error.message);
                         }
                         if (reloadBtn) {
-                            reloadBtn.style.display = 'inline-flex';
-                            reloadBtn.innerHTML = '読み込み失敗（再試行）';
-                            reloadBtn.disabled = false;
+                            reloadBtn.innerHTML = '再試行';
                         }
                     });
             }
@@ -384,7 +443,6 @@
             if ('requestIdleCallback' in window) requestIdleCallback(() => loadTimeline(null, false));
             else setTimeout(() => loadTimeline(null, false), 100);
 
-            // "もっと読み込む"ボタン
             document.addEventListener('click', function(e) {
                 if(e.target.closest('#load-more-btn')) {
                     const btn = e.target.closest('#load-more-btn');
@@ -396,9 +454,13 @@
                 }
             });
 
-            // コピペ用: 既存のイベントリスナー（Reveal, Menu, Report Feedbackなど）
+            // その他のイベントリスナー (Reveal, Menu, Report Feedbackなど)
             document.addEventListener('click', function(e) {
-                if (e.target.closest('#reload-timeline-btn')) { loadTimeline(null, true); return; }
+                if (e.target.closest('#reload-timeline-btn')) { 
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    loadTimeline(null, true); 
+                    return; 
+                }
                 if (e.target.matches('.reveal-button')) {
                     const container = e.target.closest('.post-mosaic-container');
                     const overlay = e.target.closest('.reveal-overlay');
@@ -486,7 +548,20 @@
                 }
             });
 
-            // --- モーダル制御系 (維持) ---
+            const menuBtn = document.getElementById('menu-btn');
+            const navLinks = document.getElementById('nav-links');
+            if(menuBtn){
+                menuBtn.addEventListener('click', (e)=>{ 
+                    e.stopPropagation(); 
+                    navLinks.classList.toggle('open'); 
+                });
+                document.addEventListener('click', (e)=>{ 
+                    if(!menuBtn.contains(e.target) && !navLinks.contains(e.target)) {
+                        navLinks.classList.remove('open'); 
+                    }
+                });
+            }
+            
             const alertOverlay = document.getElementById('custom-alert-overlay');
             const confirmOverlay = document.getElementById('custom-confirm-overlay');
             let confirmCallback = null;
@@ -497,13 +572,6 @@
             function hideCustomConfirm(){ confirmOverlay.classList.remove('show'); setTimeout(()=>confirmOverlay.style.display='none',300); }
             if(document.getElementById('custom-confirm-no-btn')) document.getElementById('custom-confirm-no-btn').addEventListener('click', hideCustomConfirm);
             if(document.getElementById('custom-confirm-yes-btn')) document.getElementById('custom-confirm-yes-btn').addEventListener('click', ()=>{ if(confirmCallback)confirmCallback(); hideCustomConfirm(); });
-            
-            const menuBtn = document.getElementById('menu-btn');
-            const navLinks = document.getElementById('nav-links');
-            if(menuBtn){
-                menuBtn.addEventListener('click', (e)=>{ e.stopPropagation(); navLinks.classList.toggle('open'); });
-                document.addEventListener('click', (e)=>{ if(!menuBtn.contains(e.target) && !navLinks.contains(e.target)) navLinks.classList.remove('open'); });
-            }
         });
     </script>
 </body>

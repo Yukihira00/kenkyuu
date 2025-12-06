@@ -2,16 +2,19 @@
 import os
 import json
 import re
+import time # 追加
 import google.generativeai as genai
+from google.api_core import exceptions # 追加
 from dotenv import load_dotenv
 
 load_dotenv(encoding='utf-8')
 API_KEY = os.getenv('GEMINI_API_KEY')
 
 genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel('gemini-2.5-flash')
+# model = genai.GenerativeModel('gemini-2.5-flash') # 2.5がまだ存在しない場合エラーになる可能性があるため、1.5-flashを推奨しますが、ユーザー設定を尊重します
+model = genai.GenerativeModel('gemini-2.5-flash') 
 
-# --- カテゴリ定義 (省略 - 内容は変更なしなのでそのまま) ---
+# --- カテゴリ定義 (省略 - 変更なし) ---
 CONTENT_CATEGORIES = {
     "エンターテインメントと趣味": [
         "芸能人", "話題の人物", "あの人は今", "俳優、女優", "ミュージシャン", "女性アイドル", "男性アイドル", "グラビアアイドル", "お笑い芸人",
@@ -245,31 +248,48 @@ def analyze_posts_batch(texts: list[str]):
 ]
 """
     
-    try:
-        response = model.generate_content(prompt)
-        match = re.search(r'```json\s*(\[.*\])\s*```|(\[.*\])', response.text, re.DOTALL)
-        if not match:
-            print("エラー: LLM応答からJSONリストが見つかりません。")
+    # リトライ処理: Rate Limit (429) エラー対策
+    max_retries = 3
+    base_delay = 5  # 秒
+
+    for attempt in range(max_retries):
+        try:
+            response = model.generate_content(prompt)
+            match = re.search(r'```json\s*(\[.*\])\s*```|(\[.*\])', response.text, re.DOTALL)
+            if not match:
+                print("エラー: LLM応答からJSONリストが見つかりません。")
+                return [error_result] * len(texts)
+
+            json_text = match.group(1) or match.group(2)
+            analysis_results_json = json.loads(json_text)
+
+            if isinstance(analysis_results_json, list) and len(analysis_results_json) == len(texts):
+                full_results = []
+                for i, result in enumerate(analysis_results_json):
+                    final_result = {
+                        "content_category": result.get("content_category", "その他"),
+                        "expression_category": result.get("expression_category", "その他・分類不能"),
+                        "style_stance_category": result.get("style_stance_category", "その他"),
+                        "embedding": embeddings[i]
+                    }
+                    full_results.append(final_result)
+                return full_results
+            else:
+                print(f"エラー: 結果件数不一致 (期待: {len(texts)}, 実際: {len(analysis_results_json)})")
+                return [error_result] * len(texts)
+                
+        except exceptions.ResourceExhausted:
+            if attempt < max_retries - 1:
+                sleep_time = base_delay * (2 ** attempt) # 指数バックオフ: 5秒, 10秒...
+                print(f"Rate limit exceeded (429). Retrying in {sleep_time} seconds...")
+                time.sleep(sleep_time)
+                continue
+            else:
+                print("Rate limit exceeded. Max retries reached.")
+                return [error_result] * len(texts)
+                
+        except Exception as e:
+            print(f"LLM分析エラー: {e}")
             return [error_result] * len(texts)
-
-        json_text = match.group(1) or match.group(2)
-        analysis_results_json = json.loads(json_text)
-
-        if isinstance(analysis_results_json, list) and len(analysis_results_json) == len(texts):
-            full_results = []
-            for i, result in enumerate(analysis_results_json):
-                final_result = {
-                    "content_category": result.get("content_category", "その他"),
-                    "expression_category": result.get("expression_category", "その他・分類不能"),
-                    "style_stance_category": result.get("style_stance_category", "その他"),
-                    "embedding": embeddings[i]
-                }
-                full_results.append(final_result)
-            return full_results
-        else:
-            print(f"エラー: 結果件数不一致 (期待: {len(texts)}, 実際: {len(analysis_results_json)})")
-            return [error_result] * len(texts)
-
-    except Exception as e:
-        print(f"LLM分析エラー: {e}")
-        return [error_result] * len(texts)
+    
+    return [error_result] * len(texts)
