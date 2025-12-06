@@ -1,4 +1,4 @@
-import database
+import app.database as database
 
 def calculate_performance():
     print("データベースを集計中...\n")

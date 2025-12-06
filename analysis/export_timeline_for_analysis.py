@@ -6,7 +6,7 @@ import textwrap
 import sys
 from dotenv import load_dotenv
 from atproto import Client
-import llm_analyzer
+import app.llm_analyzer as llm_analyzer
 
 # .envファイルから環境変数を読み込む
 load_dotenv(encoding='utf-8')

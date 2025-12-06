@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import pandas as pd
 import numpy as np
-import llm_analyzer
+import app.llm_analyzer as llm_analyzer
 
 # --- アプリケーションの定義 (必須) ---
 app = FastAPI()

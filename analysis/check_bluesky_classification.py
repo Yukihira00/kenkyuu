@@ -1,7 +1,7 @@
 # check_bluesky_classification.py
 import os
-import llm_analyzer
-import timeline_checker
+import app.llm_analyzer as llm_analyzer
+import app.timeline_checker as timeline_checker
 from dotenv import load_dotenv
 
 # .envファイルから環境変数を読み込む
