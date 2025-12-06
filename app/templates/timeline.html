@@ -243,7 +243,7 @@
             let analysisBuffer = [];
             const BATCH_SIZE = 10;      // 5 -> 10 に変更（リクエスト回数を減らす）
             const FLUSH_INTERVAL = 300; 
-            const MAX_CONCURRENT = 4;   // 3 -> 1 に変更（同時リクエストを制限）
+            const MAX_CONCURRENT = 3;   // 3 -> 1 に変更（同時リクエストを制限）
             let activeRequests = 0;
 
             async function processBatch() {

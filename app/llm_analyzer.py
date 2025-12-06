@@ -2,17 +2,92 @@
 import os
 import json
 import re
-import time # 追加
+import time
 import google.generativeai as genai
-from google.api_core import exceptions # 追加
+from google.api_core import exceptions
 from dotenv import load_dotenv
 
 load_dotenv(encoding='utf-8')
-API_KEY = os.getenv('GEMINI_API_KEY')
 
-genai.configure(api_key=API_KEY)
-# model = genai.GenerativeModel('gemini-2.5-flash') # 2.5がまだ存在しない場合エラーになる可能性があるため、1.5-flashを推奨しますが、ユーザー設定を尊重します
-model = genai.GenerativeModel('gemini-2.5-flash') 
+# --- APIキー管理ロジック (完全版) ---
+def load_api_keys():
+    """
+    環境変数 (GEMINI_API_KEYS または GEMINI_API_KEY) からキーを読み込む。
+    カンマ区切り、引用符、空白を自動で処理してリスト化する。
+    """
+    keys = []
+    # 複数形と単数形の両方の変数をチェック
+    raw_env_vals = [os.getenv('GEMINI_API_KEYS'), os.getenv('GEMINI_API_KEY')]
+    
+    for val in raw_env_vals:
+        if val:
+            # カンマで分割 (もしカンマがなくても要素数1のリストになるので安全)
+            parts = val.split(',')
+            for p in parts:
+                # 空白、改行、引用符を徹底的に削除
+                clean_key = p.strip().replace('"', '').replace("'", "").replace('\n', '').replace('\r', '')
+                if clean_key:
+                    keys.append(clean_key)
+    
+    # 重複を排除 (順序を保持)
+    unique_keys = []
+    seen = set()
+    for k in keys:
+        if k not in seen:
+            unique_keys.append(k)
+            seen.add(k)
+            
+    return unique_keys
+
+# グローバル変数の定義
+API_KEYS = load_api_keys()
+current_key_index = 0   # 【重要】ここで初期化が必要です
+model = None
+
+def configure_genai():
+    """現在のインデックスのキーでGenAIを構成し、モデルを初期化する"""
+    global model, current_key_index
+    
+    if not API_KEYS:
+        print("【エラー】APIキーが見つかりません。.envを確認してください。")
+        return
+
+    # インデックス調整
+    if len(API_KEYS) > 0:
+        current_key_index = current_key_index % len(API_KEYS)
+        current_key = API_KEYS[current_key_index]
+    else:
+        print("【エラー】有効なAPIキーがロードされていません。")
+        return
+    
+    # デバッグ用ログ (キーの先頭と末尾のみ表示)
+    masked_key = f"{current_key[:4]}...{current_key[-4:]}" if len(current_key) > 8 else "***"
+    print(f"GenAI Configured with Key [{current_key_index + 1}/{len(API_KEYS)}]: {masked_key}")
+
+    try:
+        genai.configure(api_key=current_key)
+        # モデル初期化 (1.5-flash推奨)
+        model = genai.GenerativeModel('gemini-2.5-flash') 
+    except Exception as e:
+        print(f"API構成エラー: {e}")
+
+def rotate_api_key():
+    """次のAPIキーに切り替える"""
+    global current_key_index
+    if len(API_KEYS) <= 1:
+        print("切り替え可能な予備のAPIキーがありません。")
+        return False
+    
+    print(f"APIキーを切り替えます... (現在のIndex: {current_key_index})")
+    current_key_index += 1
+    configure_genai()
+    return True
+
+# 初回構成実行
+if API_KEYS:
+    configure_genai()
+else:
+    print("【警告】有効なAPIキーがロードされませんでした。")
 
 # --- カテゴリ定義 (省略 - 変更なし) ---
 CONTENT_CATEGORIES = {
@@ -193,33 +268,55 @@ def analyze_posts_batch(texts: list[str]):
         "content_category": "分析失敗", "expression_category": "分析失敗",
         "style_stance_category": "分析失敗", "embedding": None
     }
-    if not API_KEY:
-        print("エラー: GEMINI_API_KEYが設定されていません。")
+    if not API_KEYS:
+        print("エラー: 有効なGEMINI APIキーが設定されていません。")
         return [error_result] * len(texts)
 
     if not texts:
         return []
 
-    # 1. 埋め込みベクトルの取得 (Gemini APIを使用 - text-embedding-004)
+    # 1. 埋め込みベクトルの取得
     embeddings = [None] * len(texts)
-    try:
-        valid_indices = [i for i, t in enumerate(texts) if t and t.strip()]
-        valid_texts = [texts[i] for i in valid_indices]
+    valid_indices = [i for i, t in enumerate(texts) if t and t.strip()]
+    valid_texts = [texts[i] for i in valid_indices]
 
-        if valid_texts:
-            result = genai.embed_content(
-                model="models/text-embedding-004",
-                content=valid_texts,
-                task_type="retrieval_document"
-            )
+    if valid_texts:
+        # キー数に応じてリトライ回数を決定（最低3回）
+        max_retries_embed = max(3, len(API_KEYS) * 2)
+        
+        for attempt in range(max_retries_embed):
+            try:
+                result = genai.embed_content(
+                    model="models/text-embedding-004",
+                    content=valid_texts,
+                    task_type="retrieval_document"
+                )
+                
+                if 'embedding' in result:
+                    for idx, embedding_vec in zip(valid_indices, result['embedding']):
+                        embeddings[idx] = embedding_vec
+                    break # 成功
+                else:
+                    print("埋め込み取得エラー: 結果に embedding キーがありません")
+                    break
             
-            if 'embedding' in result:
-                for idx, embedding_vec in zip(valid_indices, result['embedding']):
-                    embeddings[idx] = embedding_vec
-            else:
-                print("埋め込み取得エラー: 結果に embedding キーがありません")
-    except Exception as e:
-        print(f"埋め込み取得中にエラーが発生しました: {e}")
+            except exceptions.ResourceExhausted:
+                print(f"Embedding 429 Error. Key switch attempt {attempt+1}/{max_retries_embed}")
+                if rotate_api_key():
+                    time.sleep(1)
+                    continue
+                else:
+                    print("APIキーを使い切りました (Embedding)")
+                    break
+            except Exception as e:
+                # 400エラー等、キー自体が無効な場合もここでキャッチして切り替えを試みる
+                print(f"Embedding API Error: {e}")
+                if "API_KEY_INVALID" in str(e) or "400" in str(e):
+                     print("無効なAPIキーを検出しました。次のキーに切り替えます。")
+                     if rotate_api_key():
+                         time.sleep(1)
+                         continue
+                break
 
     # 2. 分類タスク
     formatted_texts = "\\n".join(f"投稿{i+1}:\\n---\\n{text}\\n---" for i, text in enumerate(texts))
@@ -248,9 +345,8 @@ def analyze_posts_batch(texts: list[str]):
 ]
 """
     
-    # リトライ処理: Rate Limit (429) エラー対策
-    max_retries = 3
-    base_delay = 5  # 秒
+    max_retries = max(3, len(API_KEYS) * 2)
+    base_delay = 5
 
     for attempt in range(max_retries):
         try:
@@ -279,17 +375,26 @@ def analyze_posts_batch(texts: list[str]):
                 return [error_result] * len(texts)
                 
         except exceptions.ResourceExhausted:
-            if attempt < max_retries - 1:
-                sleep_time = base_delay * (2 ** attempt) # 指数バックオフ: 5秒, 10秒...
-                print(f"Rate limit exceeded (429). Retrying in {sleep_time} seconds...")
-                time.sleep(sleep_time)
+            print(f"Generation 429 Error. Switching key... (Attempt {attempt+1}/{max_retries})")
+            if rotate_api_key():
+                time.sleep(1)
                 continue
             else:
-                print("Rate limit exceeded. Max retries reached.")
-                return [error_result] * len(texts)
-                
+                if attempt < max_retries - 1:
+                    sleep_time = base_delay * (2 ** attempt)
+                    print(f"No more keys. Retrying in {sleep_time} seconds...")
+                    time.sleep(sleep_time)
+                    continue
+                else:
+                    return [error_result] * len(texts)
+        
         except Exception as e:
-            print(f"LLM分析エラー: {e}")
+            print(f"LLM Generate Error: {e}")
+            if "API_KEY_INVALID" in str(e) or "400" in str(e):
+                 print("無効なAPIキーを検出しました。次のキーに切り替えます。")
+                 if rotate_api_key():
+                     time.sleep(1)
+                     continue
             return [error_result] * len(texts)
     
     return [error_result] * len(texts)
