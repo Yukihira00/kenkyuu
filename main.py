@@ -1,8 +1,9 @@
 # main.py
 from datetime import datetime
 import secrets
+from typing import List, Optional # 【修正】ここを追加しました
 from fastapi.concurrency import run_in_threadpool
-from fastapi import FastAPI, Request, Form
+from fastapi import FastAPI, Request, Form, Body
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -35,6 +36,59 @@ def get_64_type(scores: dict) -> str:
     turbulence_assertiveness = "T" if scores.get('E', 0) >= 3.0 else "A"
     light_dark = "L" if scores.get('H', 0) >= 3.0 else "D"
     return f"{mbti_type}-{turbulence_assertiveness}{light_dark}"
+
+# --- フィルタリングロジックを関数化 ---
+def apply_filter_to_post(item, analysis_result, user_filter_settings, user_scores, unpleasant_uris, unpleasant_vectors):
+    item.is_mosaic = False
+    item.analysis_info = None
+
+    SIMILARITY_THRESHOLD = user_filter_settings.get('similarity_threshold', 0.80)
+    hidden_content_manual = set(user_filter_settings.get('hidden_content_categories', []))
+    strength = user_filter_settings.get('filter_strength', 2)
+
+    if item.post.uri in unpleasant_uris:
+        item.is_mosaic = True
+        item.analysis_info = {"type": "不快な投稿", "category": "あなたが報告した投稿"}
+        return item
+
+    if not analysis_result:
+        return item
+
+    post_embedding = analysis_result.get("embedding")
+    is_similar = False
+    if post_embedding is not None and unpleasant_vectors:
+        for unpleasant_vec in unpleasant_vectors:
+            similarity = cosine_similarity(post_embedding, unpleasant_vec)
+            if similarity > SIMILARITY_THRESHOLD:
+                is_similar = True
+                break
+    
+    if user_filter_settings.get('similarity_filter_enabled') and is_similar:
+        item.is_mosaic = True
+        item.analysis_info = {"type": "類似フィルター", "category": "あなたが不快と報告した投稿に類似"}
+    elif analysis_result.get("content_category") in hidden_content_manual:
+        item.is_mosaic = True
+        item.analysis_info = {"type": "手動フィルター", "category": analysis_result.get("content_category")}
+    elif user_filter_settings.get('auto_filter_enabled') and user_scores:
+        for trait, rules_by_level in personality_descriptions.FILTERING_RULES.items():
+            level = 'high' if user_scores.get(trait.lower(), 0) >= 3.0 else 'low'
+            rule_list = rules_by_level.get(level, [])
+            for rule in rule_list:
+                categories_to_hide = rule['categories'].get(strength, [])
+                category_key = ""
+                if rule['type'] == 'style': category_key = 'style_stance_category'
+                elif rule['type'] == 'expression': category_key = 'expression_category'
+                elif rule['type'] == 'content': category_key = 'content_category'
+
+                if category_key:
+                    post_category = analysis_result.get(category_key)
+                    if post_category in categories_to_hide:
+                        item.is_mosaic = True
+                        item.analysis_info = {"type": "性格診断フィルター", "category": post_category}
+                        break
+            if item.is_mosaic: break
+    
+    return item
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
@@ -86,18 +140,12 @@ async def get_timeline_content(request: Request, cursor: str = None, feed_type: 
     if 'user_did' not in request.session: return HTMLResponse("セッション切れです。再ログインしてください。", status_code=403)
 
     user_did = request.session['user_did']
+    
     user_filter_settings = database.get_user_filter_settings(user_did)
     user_scores = database.get_user_result(user_did)
-    hidden_content_manual = set(user_filter_settings.get('hidden_content_categories', []))
     unpleasant_uris = set(database.get_unpleasant_feedback_uris(user_did))
     unpleasant_vectors = database.get_unpleasant_post_vectors(user_did)
     
-    strength = user_filter_settings.get('filter_strength', 2)
-    
-    # ▼▼▼ 変更: 固定の辞書ではなく、DBに保存されたしきい値を使用する ▼▼▼
-    # デフォルト値は0.80（database.pyのデフォルトと合わせる）
-    SIMILARITY_THRESHOLD = user_filter_settings.get('similarity_threshold', 0.80)
-
     raw_feed, next_cursor = await run_in_threadpool(
         timeline_checker.get_timeline_data,
         request.session['handle'], 
@@ -113,23 +161,6 @@ async def get_timeline_content(request: Request, cursor: str = None, feed_type: 
     all_post_uris = [item.post.uri for item in raw_feed if item.post and item.post.uri]
     cached_results = database.get_cached_analysis_results(all_post_uris)
     
-    posts_to_analyze = {
-        item.post.uri: item.post.record.text.strip()
-        for item in raw_feed
-        if item.post.uri not in cached_results and hasattr(item.post.record, 'text') and item.post.record.text
-    }
-
-    if posts_to_analyze:
-        uris_to_analyze = list(posts_to_analyze.keys())
-        texts_to_analyze = list(posts_to_analyze.values())
-        
-        llm_results = await run_in_threadpool(llm_analyzer.analyze_posts_batch, texts_to_analyze)
-        
-        for uri, result in zip(uris_to_analyze, llm_results):
-            if result:
-                cached_results[uri] = result
-                database.save_analysis_results(uri, result)
-
     processed_feed, hidden_post_count = [], 0
     for item in raw_feed:
         if isinstance(item.post.indexed_at, str):
@@ -137,57 +168,84 @@ async def get_timeline_content(request: Request, cursor: str = None, feed_type: 
             
         analysis_result = cached_results.get(item.post.uri)
         item.is_mosaic = False
-        
-        if item.post.uri in unpleasant_uris:
-            item.is_mosaic = True
-            item.analysis_info = {"type": "不快な投稿", "category": "あなたが報告した投稿"}
-        elif analysis_result:
-            post_embedding = analysis_result.get("embedding")
-            is_similar = False
-            if post_embedding is not None and unpleasant_vectors:
-                for unpleasant_vec in unpleasant_vectors:
-                    similarity = cosine_similarity(post_embedding, unpleasant_vec)
-                    if similarity > SIMILARITY_THRESHOLD:
-                        is_similar = True
-                        break
-            
-            if user_filter_settings.get('similarity_filter_enabled') and is_similar:
-                item.is_mosaic = True
-                item.analysis_info = {"type": "類似フィルター", "category": "あなたが不快と報告した投稿に類似"}
-            elif analysis_result.get("content_category") in hidden_content_manual:
-                item.is_mosaic = True
-                item.analysis_info = {"type": "手動フィルター", "category": analysis_result.get("content_category")}
-            elif user_filter_settings.get('auto_filter_enabled') and user_scores:
-                for trait, rules_by_level in personality_descriptions.FILTERING_RULES.items():
-                    level = 'high' if user_scores.get(trait.lower(), 0) >= 3.0 else 'low'
-                    rule_list = rules_by_level.get(level, [])
-                    for rule in rule_list:
-                        categories_to_hide = rule['categories'].get(strength, [])
-                        category_key = ""
-                        if rule['type'] == 'style': category_key = 'style_stance_category'
-                        elif rule['type'] == 'expression': category_key = 'expression_category'
-                        elif rule['type'] == 'content': category_key = 'content_category'
+        item.analysis_info = None
+        item.needs_analysis = False
 
-                        if category_key:
-                            post_category = analysis_result.get(category_key)
-                            if post_category in categories_to_hide:
-                                item.is_mosaic = True
-                                item.analysis_info = {"type": "性格診断フィルター", "category": post_category}
-                                break
-                    if item.is_mosaic: break
+        if analysis_result or (item.post.uri in unpleasant_uris):
+            apply_filter_to_post(item, analysis_result, user_filter_settings, user_scores, unpleasant_uris, unpleasant_vectors)
+            if item.is_mosaic: hidden_post_count += 1
+        else:
+            item.needs_analysis = True
         
-        if item.is_mosaic: hidden_post_count += 1
         processed_feed.append(item)
 
     return templates.TemplateResponse("timeline_items.html", {
         "request": request, 
         "feed": processed_feed, 
-        "hidden_post_count": hidden_post_count, 
+        "hidden_post_count": hidden_post_count,
         "total_post_count": len(raw_feed), 
         "analysis_results": cached_results,
         "next_cursor": next_cursor
     })
 
+# --- バッチ分析API ---
+class PostItem(BaseModel):
+    uri: str
+    text: str
+
+class AnalyzeBatchPayload(BaseModel):
+    items: List[PostItem] # 【修正】List型ヒントを使用
+
+@app.post("/api/analyze_posts_batch")
+async def analyze_batch_posts_api(request: Request, payload: AnalyzeBatchPayload):
+    if 'user_did' not in request.session: return JSONResponse(content={"error": "Not logged in"}, status_code=401)
+    
+    user_did = request.session['user_did']
+    
+    texts = [item.text for item in payload.items]
+    uris = [item.uri for item in payload.items]
+    
+    if not texts:
+        return JSONResponse(content={"results": []})
+
+    # Gemini API呼び出し
+    llm_results = await run_in_threadpool(llm_analyzer.analyze_posts_batch, texts)
+    
+    user_filter_settings = database.get_user_filter_settings(user_did)
+    user_scores = database.get_user_result(user_did)
+    unpleasant_uris = set(database.get_unpleasant_feedback_uris(user_did))
+    unpleasant_vectors = database.get_unpleasant_post_vectors(user_did)
+    
+    response_results = []
+    
+    for i, result in enumerate(llm_results):
+        uri = uris[i]
+        
+        if result:
+            database.save_analysis_results(uri, result)
+        
+        class DummyPost: uri = ""
+        class DummyItem:
+            post = DummyPost()
+            is_mosaic = False
+            analysis_info = None
+        
+        dummy_item = DummyItem()
+        dummy_item.post.uri = uri
+        
+        apply_filter_to_post(dummy_item, result, user_filter_settings, user_scores, unpleasant_uris, unpleasant_vectors)
+        
+        response_results.append({
+            "uri": uri,
+            "success": True,
+            "is_mosaic": dummy_item.is_mosaic,
+            "analysis_info": dummy_item.analysis_info,
+            "analysis_result": result
+        })
+    
+    return JSONResponse(content={"results": response_results})
+
+# ... (ログアウト以下のコードは既存と同じ) ...
 @app.get("/logout")
 async def logout(request: Request):
     request.session.clear()
@@ -230,11 +288,8 @@ async def save_settings(request: Request):
     auto_filter_enabled = form_data.get("auto_filter_switch") == "on"
     similarity_filter_enabled = form_data.get("similarity_filter_switch") == "on"
     filter_strength = int(form_data.get("filter_strength", 2))
-    
-    # ▼▼▼ 追加: スライダーの値を取得（デフォルトは0.80） ▼▼▼
     similarity_threshold = float(form_data.get("similarity_threshold", 0.80))
     
-    # ▼▼▼ 変更: similarity_threshold を保存関数に渡す ▼▼▼
     database.save_user_filter_settings(request.session['user_did'], hidden_content, auto_filter_enabled, similarity_filter_enabled, filter_strength, similarity_threshold)
     
     user_settings = database.get_user_filter_settings(request.session['user_did'])
