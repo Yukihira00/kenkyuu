@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>採点完了</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .result-box { text-align: center; padding: 2rem; }
+        .result-box h2 { font-size: 1.5em; color: var(--primary-color); }
+        .accuracy { font-size: 1.2em; margin: 1rem 0; }
+        .accuracy strong { font-size: 1.5em; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="result-box">
+                <h1>🎉 採点完了</h1>
+                <p>お疲れ様でした！ {{ total }} 件すべての採点が完了しました。</p>
+                <p>CSVファイル（analysis_for_checking_01.csv）に結果が保存されています。</p>
+                
+                <hr style="margin: 2rem 0;">
+                
+                <h2>最終正解率 (Accuracy)</h2>
+                <div class="accuracy">
+                    コンテンツ (Content): <strong>{{ "%.2f"|format(content_acc) }} %</strong>
+                </div>
+                <div class="accuracy">
+                    表現 (Expression): <strong>{{ "%.2f"|format(expression_acc) }} %</strong>
+                </div>
+                <div class="accuracy">
+                    スタイル (Style): <strong>{{ "%.2f"|format(style_acc) }} %</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>タイムライン</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        /* Loading Spinner */
+        .loader-container {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 3rem 0;
+        }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 4px solid rgba(0,0,0,0.1);
+            border-left-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 1rem;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        
+        /* timeline.html固有のスタイル (既存維持) */
+        .feedback-section-after-reveal { margin-top: 15px; padding: 15px; border-top: 1px solid var(--border-color); text-align: center; background-color: #f8f9fa; }
+        .feedback-question { font-size: 0.9em; color: var(--text-color); margin-bottom: 8px; }
+        .feedback-buttons { display: flex; gap: 10px; justify-content: center; }
+        .feedback-btn { background: none; border: 1px solid #ccc; padding: 5px 12px; border-radius: 15px; cursor: pointer; font-size: 0.85em; transition: all 0.2s; }
+        .feedback-btn.correct { border-color: #28a745; color: #28a745; }
+        .feedback-btn.correct:hover { background-color: #28a745; color: white; }
+        .feedback-btn.incorrect { border-color: #ffc107; color: #ffc107; }
+        .feedback-btn.incorrect:hover { background-color: #ffc107; color: white; }
+        .feedback-thanks { font-size: 0.9em; color: #28a745; font-weight: bold; display: none; }
+        
+        .post-images { margin-top: 15px; display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; }
+        .post-images img { max-width: 100%; height: auto; display: block; border-radius: var(--border-radius); object-fit: cover; }
+
+        .post-menu { position: relative; }
+        .post-menu-btn { background: none; border: none; font-size: 1.5em; cursor: pointer; color: var(--text-color-light); padding: 0 5px; opacity: 0.6; transition: opacity 0.2s;}
+        .post:hover .post-menu-btn { opacity: 1; }
+        
+        .analysis-popup { display: none; position: absolute; top: 30px; right: 0; background: white; border-radius: 8px; box-shadow: 0 5px 20px rgba(0,0,0,0.15); width: 200px; z-index: 100; padding: 0.5rem; overflow: hidden; }
+        .analysis-popup.show { display: block; }
+        
+        .popup-item { display: flex; align-items: center; gap: 0.8rem; padding: 0.7rem 0.8rem; cursor: pointer; border-radius: 6px; transition: background-color 0.2s; font-size: 0.9em; font-weight: 500; background: none; border: none; width: 100%; text-align: left; color: var(--text-color); }
+        .popup-item:hover { background-color: var(--background-color); }
+        .popup-item svg { width: 16px; height: 16px; stroke-width: 2; color: var(--text-color-light); }
+
+        .unpleasant-btn { color: var(--accent-color-red); }
+        .unpleasant-btn:hover { background-color: #fbeae8; }
+        .unpleasant-btn svg { color: var(--accent-color-red); }
+        
+        .analysis-details { margin-top: 0.5rem; border-top: 1px solid var(--border-color); padding: 0.8rem; font-size: 0.85em; }
+        .analysis-details p { margin: 0 0 5px 0; }
+        .analysis-details strong { color: var(--primary-color-dark); }
+
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 2000; opacity: 0; transition: opacity 0.3s ease; pointer-events: none;
+        }
+        .modal-overlay.show { opacity: 1; pointer-events: auto; }
+
+        .modal-box {
+            background: white; padding: 2rem; border-radius: var(--border-radius);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3); text-align: center;
+            max-width: 90%; width: 400px;
+            transform: scale(0.9); transition: transform 0.3s ease;
+        }
+        .modal-overlay.show .modal-box { transform: scale(1); }
+        .modal-box p { margin-top: 0; margin-bottom: 1.5rem; font-size: 1.1em; }
+
+        .modal-buttons { display: flex; justify-content: center; gap: 1rem; }
+        
+        .reload-section {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+        .reload-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.8rem 2rem;
+            background-color: var(--card-background-color);
+            border: 1px solid var(--primary-color);
+            color: var(--primary-color);
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .reload-btn:hover {
+            background-color: var(--primary-color);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .reload-btn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        /* タブデザイン */
+        .tabs { display: flex; justify-content: center; gap: 1rem; margin-bottom: 1.5rem; }
+        .tab-btn {
+            background: none; border: none; padding: 0.8rem 1.5rem;
+            font-size: 1rem; font-weight: bold; color: var(--text-color-light);
+            cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s;
+        }
+        .tab-btn:hover { color: var(--primary-color); }
+        .tab-btn.active { color: var(--primary-color); border-bottom-color: var(--primary-color); }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-top">
+                <h1>{{ user.display_name or user.handle }}さんのタイムライン</h1>
+                <div class="hamburger-menu">
+                    <button class="menu-btn" id="menu-btn"><span></span><span></span><span></span></button>
+                    <ul class="nav-links" id="nav-links">
+                        <li><a href="/results">診断結果を見る</a></li>
+                        <li><a href="/settings">フィルター設定</a></li>
+                        <li class="logout"><a href="/logout">ログアウト</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div id="timeline-container">
+            <div class="reload-section">
+                <div class="tabs">
+                <button class="tab-btn active" data-type="search">最新の投稿</button>
+                <button class="tab-btn" data-type="timeline">フォロー中</button>
+            </div>
+                <button id="reload-timeline-btn" class="reload-btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                    新しい投稿を読み込む
+                </button>
+            </div>
+
+            <div id="filter-stats-placeholder"></div>
+
+            <div id="initial-loader" class="loader-container">
+                <div class="spinner"></div>
+                <p>タイムラインを読み込み中...</p>
+            </div>
+            <div id="feed-content"></div>
+        </div>
+    </div>
+
+    <div id="custom-alert-overlay" class="modal-overlay">
+        <div class="modal-box">
+            <p id="custom-alert-message"></p>
+            <button id="custom-alert-ok-btn" class="btn btn-primary">OK</button>
+        </div>
+    </div>
+    <div id="custom-confirm-overlay" class="modal-overlay">
+        <div class="modal-box">
+            <p id="custom-confirm-message"></p>
+            <div class="modal-buttons">
+                <button id="custom-confirm-no-btn" class="btn btn-secondary">いいえ</button>
+                <button id="custom-confirm-yes-btn" class="btn btn-primary">はい</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const feedContent = document.getElementById('feed-content');
+            const initialLoader = document.getElementById('initial-loader');
+            const reloadBtn = document.getElementById('reload-timeline-btn');
+            let currentFeedType = 'search';
+
+            // --- Parallel Batch Analysis Worker ---
+            // 複数のバッチを同時に処理して高速化する
+            let analysisBuffer = [];
+            const BATCH_SIZE = 5;      // 1回に20件まとめて送る（これで回数を節約）
+            const FLUSH_INTERVAL = 300; 
+            const MAX_CONCURRENT = 3;  // ★重要: 同時に処理するリクエスト数（これを増やすと早くなる）
+            let activeRequests = 0;
+
+            async function processBatch() {
+                // 処理枠がいっぱい、または処理するデータがない場合は何もしない
+                if (activeRequests >= MAX_CONCURRENT || analysisBuffer.length === 0) return;
+
+                activeRequests++; // 処理枠を確保
+                const batch = analysisBuffer.splice(0, BATCH_SIZE); // 先頭から取り出し
+
+                const payloadItems = batch.map(task => ({ uri: task.uri, text: task.text }));
+
+                try {
+                    const response = await fetch('/api/analyze_posts_batch', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ items: payloadItems })
+                    });
+                    
+                    if (!response.ok) throw new Error('Network error');
+                    const data = await response.json();
+                    
+                    data.results.forEach(res => {
+                        const task = batch.find(t => t.uri === res.uri);
+                        if (task && res.success) {
+                            updatePostWithAnalysis(task.element, res);
+                        }
+                    });
+
+                } catch (error) {
+                    console.error("Batch Analysis failed", error);
+                    batch.forEach(task => {
+                         const overlay = task.element.querySelector('.analyzing-overlay');
+                         if (overlay) overlay.style.display = 'none';
+                         const placeholder = task.element.querySelector('.analysis-placeholder span');
+                         if (placeholder) placeholder.textContent = '分析エラー';
+                    });
+                } finally {
+                    activeRequests--; // 処理枠を解放
+                    // すぐに次のバッチがあれば処理（待機時間なし）
+                    if (analysisBuffer.length > 0) {
+                        processBatch();
+                    }
+                }
+            }
+
+            // バッファを監視して、枠が空いていれば処理を開始する
+            setInterval(processBatch, FLUSH_INTERVAL);
+
+            function enqueueAnalysis(element) {
+                const uri = element.dataset.uri;
+                const text = element.dataset.text;
+                analysisBuffer.push({ element, uri, text });
+                // 追加した瞬間に余裕があれば即実行
+                processBatch();
+            }
+
+            // ... (以下の updatePostWithAnalysis 関数やイベントリスナーは前回と同じなのでそのまま使う) ...
+            function updatePostWithAnalysis(element, data) {
+                const loadingOverlay = element.querySelector('.analyzing-overlay');
+                if (loadingOverlay) loadingOverlay.remove();
+
+                if (data.is_mosaic) {
+                    element.querySelector('.post').classList.add('post-content-hidden');
+                    let overlay = element.querySelector('.reveal-overlay');
+                    if (!overlay) {
+                        overlay = document.createElement('div');
+                        overlay.className = 'reveal-overlay';
+                        overlay.innerHTML = `<button class="btn btn-primary reveal-button" style="margin-bottom: 1rem;">投稿を表示する</button>`;
+                        element.prepend(overlay);
+                    }
+                    if (data.analysis_info) {
+                        const infoDiv = document.createElement('div');
+                        infoDiv.style.cssText = "background: rgba(255,255,255,0.8); padding: 0.8rem; border-radius: 8px; text-align: center;";
+                        infoDiv.innerHTML = `<strong style="color: var(--primary-color-dark); display: block; margin-bottom: 0.3rem;">非表示理由 (${data.analysis_info.type})</strong><span>${data.analysis_info.category}</span>`;
+                        const existingInfo = overlay.querySelector('div');
+                        if (existingInfo) existingInfo.replaceWith(infoDiv);
+                        else overlay.appendChild(infoDiv);
+                    }
+                    if (data.analysis_info.type !== "不快な投稿") {
+                        const postContent = element.querySelector('.post');
+                        if (!postContent.querySelector('.feedback-section-after-reveal')) {
+                            const fbSection = document.createElement('div');
+                            fbSection.className = 'feedback-section-after-reveal';
+                            fbSection.style.display = 'none';
+                            fbSection.dataset.uri = element.dataset.uri;
+                            fbSection.dataset.filterType = data.analysis_info.type;
+                            fbSection.innerHTML = `<p class="feedback-question">この投稿の非表示は適切でしたか？</p><div class="feedback-buttons"><button class="feedback-btn correct" data-feedback="correct">はい、適切でした</button><button class="feedback-btn incorrect" data-feedback="incorrect">いいえ、表示して良い</button></div><p class="feedback-thanks">フィードバックありがとうございます！</p>`;
+                            postContent.appendChild(fbSection);
+                        }
+                    }
+                    const counter = document.getElementById('filter-count');
+                    if (counter) counter.textContent = parseInt(counter.textContent || 0) + 1;
+                }
+
+                const placeholder = element.querySelector('.analysis-placeholder');
+                const resultContainer = element.querySelector('.analysis-result-container');
+                if (placeholder && resultContainer && data.analysis_result) {
+                    resultContainer.querySelector('.res-content').textContent = data.analysis_result.content_category;
+                    resultContainer.querySelector('.res-expression').textContent = data.analysis_result.expression_category;
+                    resultContainer.querySelector('.res-style').textContent = data.analysis_result.style_stance_category;
+                    placeholder.style.display = 'none';
+                    resultContainer.style.display = 'block';
+                    while(resultContainer.firstChild) {
+                        placeholder.parentNode.insertBefore(resultContainer.firstChild, placeholder);
+                    }
+                    placeholder.remove();
+                    resultContainer.remove();
+                }
+            }
+
+            // ... (これ以降の loadTimeline などのコードは前回提示した内容と同じものを維持) ...
+            
+            // タブ切り替えイベント
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    if (btn.classList.contains('active')) return;
+                    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    currentFeedType = btn.dataset.type;
+                    feedContent.innerHTML = ''; 
+                    const statsPlaceholder = document.getElementById('filter-stats-placeholder');
+                    if(statsPlaceholder) statsPlaceholder.innerHTML = '';
+                    if (initialLoader) initialLoader.style.display = 'flex';
+                    loadTimeline(null, false);
+                });
+            });
+
+            // タイムライン読み込み関数
+            function loadTimeline(cursor = null, isPrepend = false) {
+                let url = `/timeline_content?feed_type=${currentFeedType}`;
+                if (cursor) url += `&cursor=${encodeURIComponent(cursor)}`;
+                if (!cursor && reloadBtn) reloadBtn.style.display = 'none';
+
+                fetch(url)
+                    .then(response => { if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`); return response.text(); })
+                    .then(html => {
+                        if (initialLoader) initialLoader.style.display = 'none';
+                        if (!cursor && reloadBtn) {
+                            reloadBtn.style.display = 'inline-flex';
+                            reloadBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg> 新しい投稿を読み込む';
+                            reloadBtn.disabled = false;
+                        }
+
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = html;
+                        
+                        const batchInfo = tempDiv.querySelector('.batch-info');
+                        const statsPlaceholder = document.getElementById('filter-stats-placeholder');
+                        if (batchInfo && statsPlaceholder) {
+                            if (!isPrepend) statsPlaceholder.innerHTML = ''; 
+                            statsPlaceholder.appendChild(batchInfo);
+                        }
+
+                        const existingMoreBtn = document.querySelector('.load-more-container');
+                        if (existingMoreBtn && !isPrepend) existingMoreBtn.remove();
+                        const newMoreBtn = tempDiv.querySelector('.load-more-container');
+
+                        const newPosts = tempDiv.querySelectorAll('.post-mosaic-container');
+                        const existingIds = new Set();
+                        document.querySelectorAll('.post-mosaic-container').forEach(el => existingIds.add(el.id));
+
+                        const fragment = document.createDocumentFragment();
+                        const postsToAnalyze = [];
+
+                        newPosts.forEach(post => {
+                            if (!existingIds.has(post.id)) {
+                                fragment.appendChild(post);
+                                if (post.classList.contains('needs-analysis')) {
+                                    postsToAnalyze.push(post);
+                                }
+                            }
+                        });
+
+                        if (isPrepend) {
+                            feedContent.prepend(fragment);
+                            showCustomAlert(`${postsToAnalyze.length > 0 ? '投稿を読み込み、分析を開始します' : '投稿を読み込みました'}`);
+                        } else {
+                            feedContent.appendChild(fragment);
+                        }
+                        
+                        if (newMoreBtn && !isPrepend) feedContent.appendChild(newMoreBtn);
+
+                        // 分析キューに追加
+                        postsToAnalyze.forEach(post => enqueueAnalysis(post));
+                    })
+                    .catch(error => {
+                        console.error('Error loading timeline:', error);
+                        if (initialLoader && initialLoader.style.display !== 'none') {
+                            initialLoader.innerHTML = `<p style="color:var(--accent-color-red); font-weight:bold;">読み込みに失敗しました。</p><p style="font-size:0.9em; color:#666;">${error.message}</p><button class="btn btn-secondary" onclick="location.reload()">ページを再読み込み</button>`;
+                        } else {
+                            showCustomAlert('読み込みに失敗しました: ' + error.message);
+                        }
+                        if (reloadBtn) {
+                            reloadBtn.style.display = 'inline-flex';
+                            reloadBtn.innerHTML = '読み込み失敗（再試行）';
+                            reloadBtn.disabled = false;
+                        }
+                    });
+            }
+
+            if ('requestIdleCallback' in window) requestIdleCallback(() => loadTimeline(null, false));
+            else setTimeout(() => loadTimeline(null, false), 100);
+
+            // "もっと読み込む"ボタン
+            document.addEventListener('click', function(e) {
+                if(e.target.closest('#load-more-btn')) {
+                    const btn = e.target.closest('#load-more-btn');
+                    const cursor = btn.dataset.cursor;
+                    btn.textContent = "読み込み中...";
+                    btn.disabled = true;
+                    loadTimeline(cursor, false);
+                    btn.remove();
+                }
+            });
+
+            // コピペ用: 既存のイベントリスナー（Reveal, Menu, Report Feedbackなど）
+            document.addEventListener('click', function(e) {
+                if (e.target.closest('#reload-timeline-btn')) { loadTimeline(null, true); return; }
+                if (e.target.matches('.reveal-button')) {
+                    const container = e.target.closest('.post-mosaic-container');
+                    const overlay = e.target.closest('.reveal-overlay');
+                    const postContent = container.querySelector('.post-content-hidden');
+                    if (overlay && postContent) {
+                        overlay.classList.add('hidden');
+                        postContent.classList.add('revealed');
+                        const feedbackSection = container.querySelector('.feedback-section-after-reveal');
+                        if (feedbackSection) feedbackSection.style.display = 'block';
+                    }
+                    return;
+                }
+                if (e.target.matches('.post-menu-btn')) {
+                    e.stopPropagation();
+                    const uri = e.target.dataset.uri;
+                    const popup = document.getElementById(`popup-${uri}`);
+                    document.querySelectorAll('.analysis-popup.show').forEach(p => {
+                        if (p !== popup) {
+                            p.classList.remove('show');
+                            const details = p.querySelector('.analysis-details');
+                            if (details) details.style.display = 'none';
+                        }
+                    });
+                    if (popup) popup.classList.toggle('show');
+                    return;
+                }
+                if (e.target.closest('.analysis-header')) {
+                    e.stopPropagation();
+                    const container = e.target.closest('.analysis-popup');
+                    const detailsDiv = container.querySelector('.analysis-details');
+                    if (detailsDiv) detailsDiv.style.display = (detailsDiv.style.display === 'none') ? 'block' : 'none';
+                    return;
+                }
+                if (e.target.closest('.unpleasant-btn')) {
+                    e.stopPropagation();
+                    const btn = e.target.closest('.unpleasant-btn');
+                    const uri = btn.dataset.uri;
+                    const postContainer = document.getElementById(`post-container-${uri}`);
+                    showCustomConfirm('この投稿を不快な投稿として報告しますか？', () => {
+                        fetch('/report_unpleasant', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ uri: uri })
+                        }).then(r=>r.json()).then(data => {
+                            if(data.success) {
+                                showCustomAlert('フィードバックを送信しました。この投稿は非表示になります。');
+                                if(postContainer) {
+                                    postContainer.querySelector('.post').classList.add('post-content-hidden');
+                                    let overlay = postContainer.querySelector('.reveal-overlay');
+                                    if(!overlay) {
+                                        overlay = document.createElement('div');
+                                        overlay.className = 'reveal-overlay';
+                                        overlay.innerHTML = `<button class="btn btn-primary reveal-button" style="margin-bottom: 1rem;">投稿を表示する</button><div style="background: rgba(255,255,255,0.8); padding: 0.8rem; border-radius: 8px; text-align: center;"><strong style="color: var(--primary-color-dark); display: block; margin-bottom: 0.3rem;">非表示理由 (不快な投稿)</strong><span>あなたが報告した投稿</span></div>`;
+                                        postContainer.prepend(overlay);
+                                    }
+                                }
+                            } else showCustomAlert('報告に失敗しました。');
+                        });
+                    });
+                    const popup = btn.closest('.analysis-popup');
+                    if (popup) popup.classList.remove('show');
+                    return;
+                }
+                if (e.target.matches('.feedback-btn')) {
+                    const section = e.target.closest('.feedback-section-after-reveal');
+                    fetch('/report_filter_feedback', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ uri: section.dataset.uri, filter_type: section.dataset.filterType, feedback: e.target.dataset.feedback })
+                    }).then(r=>r.json()).then(d => {
+                        if(d.success) {
+                            section.querySelector('.feedback-question').style.display='none';
+                            section.querySelector('.feedback-buttons').style.display='none';
+                            section.querySelector('.feedback-thanks').style.display='block';
+                        }
+                    });
+                    return;
+                }
+                if (!e.target.closest('.analysis-popup') && !e.target.closest('.post-menu-btn')) {
+                    document.querySelectorAll('.analysis-popup.show').forEach(p => {
+                        p.classList.remove('show');
+                        const d = p.querySelector('.analysis-details');
+                        if(d) d.style.display='none';
+                    });
+                }
+            });
+
+            // --- モーダル制御系 (維持) ---
+            const alertOverlay = document.getElementById('custom-alert-overlay');
+            const confirmOverlay = document.getElementById('custom-confirm-overlay');
+            let confirmCallback = null;
+            function showCustomAlert(msg){ document.getElementById('custom-alert-message').textContent=msg; alertOverlay.style.display='flex'; setTimeout(()=>alertOverlay.classList.add('show'),10); }
+            function hideCustomAlert(){ alertOverlay.classList.remove('show'); setTimeout(()=>alertOverlay.style.display='none',300); }
+            if(document.getElementById('custom-alert-ok-btn')) document.getElementById('custom-alert-ok-btn').addEventListener('click', hideCustomAlert);
+            function showCustomConfirm(msg, cb){ document.getElementById('custom-confirm-message').textContent=msg; confirmCallback=cb; confirmOverlay.style.display='flex'; setTimeout(()=>confirmOverlay.classList.add('show'),10); }
+            function hideCustomConfirm(){ confirmOverlay.classList.remove('show'); setTimeout(()=>confirmOverlay.style.display='none',300); }
+            if(document.getElementById('custom-confirm-no-btn')) document.getElementById('custom-confirm-no-btn').addEventListener('click', hideCustomConfirm);
+            if(document.getElementById('custom-confirm-yes-btn')) document.getElementById('custom-confirm-yes-btn').addEventListener('click', ()=>{ if(confirmCallback)confirmCallback(); hideCustomConfirm(); });
+            
+            const menuBtn = document.getElementById('menu-btn');
+            const navLinks = document.getElementById('nav-links');
+            if(menuBtn){
+                menuBtn.addEventListener('click', (e)=>{ e.stopPropagation(); navLinks.classList.toggle('open'); });
+                document.addEventListener('click', (e)=>{ if(!menuBtn.contains(e.target) && !navLinks.contains(e.target)) navLinks.classList.remove('open'); });
+            }
+        });
+    </script>
+</body>
+</html>

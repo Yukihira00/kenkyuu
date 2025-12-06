@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>診断結果</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* results.html固有のスタイル */
+        .personality-type-card {
+            text-align: center;
+            padding: 2rem;
+            background-color: var(--background-color);
+            border-radius: var(--border-radius);
+            margin-bottom: 2rem;
+        }
+        .personality-type-card .type-code {
+            font-size: 2.5em;
+            color: var(--primary-color);
+            margin: 0.5rem 0;
+            font-weight: 700;
+            font-family: monospace;
+        }
+        .personality-type-card .type-title { font-size: 1.5em; color: var(--text-color); margin-top: 0; }
+        .personality-type-card .type-name { font-size: 1.2em; color: var(--text-color-light); font-weight: 500; margin-bottom: 1rem; }
+        .personality-type-card .type-description { font-size: 1em; line-height: 1.6; max-width: 600px; margin: 0 auto; }
+        
+        .result-card { border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 1.5rem; padding: 1.5rem; }
+        .trait-header { display: flex; align-items: center; justify-content: space-between; }
+        .trait-name { font-size: 1.4em; font-weight: 700; color: var(--text-color); }
+        .trait-score { font-size: 1.1em; font-weight: 500; background-color: var(--primary-color); color: white; padding: 0.3rem 0.8rem; border-radius: 1rem; }
+        .description { margin-top: 1rem; }
+        .description h3 { font-size: 1.1em; color: var(--primary-color); margin-top: 1.5rem; margin-bottom: 0.5rem; }
+        .description p { margin-bottom: 0; }
+        .footer-nav { text-align: center; margin-top: 2rem; display: flex; justify-content: center; gap: 1rem; }
+
+        /* ▼▼▼【追加】モーダル関連のスタイル ▼▼▼ */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 2000; opacity: 0; transition: opacity 0.3s ease; pointer-events: none;
+        }
+        .modal-overlay.show { opacity: 1; pointer-events: auto; }
+        .modal-box {
+            background: white; padding: 2rem; border-radius: var(--border-radius);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3); text-align: center;
+            max-width: 90%; width: 400px;
+            transform: scale(0.9); transition: transform 0.3s ease;
+        }
+        .modal-overlay.show .modal-box { transform: scale(1); }
+        .modal-box p { margin-top: 0; margin-bottom: 1.5rem; font-size: 1.1em; }
+        .modal-buttons { display: flex; justify-content: center; gap: 1rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>診断結果</h1>
+            <div class="personality-type-card">
+                <p>あなたのタイプは...</p>
+                <h2 class="type-code">{{ type_code }}</h2>
+                <h3 class="type-title">{{ type_info.title }}</h3>
+                <p class="type-name">{{ type_info.type_name }}</p>
+                <p class="type-description">{{ type_info.description }}</p>
+            </div>
+
+            <div style="width: 90%; max-width: 500px; margin: 2rem auto;">
+                <canvas id="hexacoChart"></canvas>
+            </div>
+
+            {% for trait, score in scores.items() %}
+                <div class="result-card">
+                    <div class="trait-header">
+                        <span class="trait-name">{{ descriptions[trait].name }}</span>
+                        <span class="trait-score">スコア: {{ "%.2f"|format(score) }}</span>
+                    </div>
+                    {% set level = 'high' if score >= 3.0 else 'low' %}
+                    <div class="description">
+                        <h3>どのような性格？</h3>
+                        <p>{{ descriptions[trait][level].personality }}</p>
+                        <h3>どのような投稿が苦手？</h3>
+                        <p>{{ descriptions[trait][level].posts }}</p>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+        <div class="footer-nav">
+            <button id="retest-btn" class="btn btn-secondary">再診断する</button>
+            <a href="/timeline" class="btn btn-primary">タイムラインへ進む</a>
+        </div>
+    </div>
+
+    <div id="custom-confirm-overlay" class="modal-overlay">
+        <div class="modal-box">
+            <p id="custom-confirm-message"></p>
+            <div class="modal-buttons">
+                <button id="custom-confirm-no-btn" class="btn btn-secondary">いいえ</button>
+                <button id="custom-confirm-yes-btn" class="btn btn-primary">はい</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // (Chart.jsのコードは変更なし)
+        const scoresData = {{ scores | tojson }};
+        const chartData = {
+            labels: ['正直さ・謙虚さ (H)', '情動性 (E)', '外向性 (X)', '協調性 (A)', '誠実性 (C)', '開放性 (O)'],
+            datasets: [{
+                label: '性格診断結果',
+                data: [scoresData.H, scoresData.E, scoresData.X, scoresData.A, scoresData.C, scoresData.O],
+                fill: true,
+                backgroundColor: 'rgba(74, 144, 226, 0.2)',
+                borderColor: 'rgb(74, 144, 226)',
+                pointBackgroundColor: 'rgb(74, 144, 226)',
+            }]
+        };
+        const chartConfig = {
+            type: 'radar', data: chartData,
+            options: { scales: { r: { suggestedMin: 0, suggestedMax: 5, pointLabels: { font: { size: 13 } } } } }
+        };
+        new Chart(document.getElementById('hexacoChart').getContext('2d'), chartConfig);
+
+        // ▼▼▼【追加】モーダル制御とボタンイベントのJavaScript ▼▼▼
+        document.addEventListener('DOMContentLoaded', function() {
+            const confirmOverlay = document.getElementById('custom-confirm-overlay');
+            const confirmYesBtn = document.getElementById('custom-confirm-yes-btn');
+            const confirmNoBtn = document.getElementById('custom-confirm-no-btn');
+            const retestBtn = document.getElementById('retest-btn');
+
+            let confirmCallback = null;
+            function showCustomConfirm(message, callback) {
+                document.getElementById('custom-confirm-message').textContent = message;
+                confirmCallback = callback;
+                confirmOverlay.style.display = 'flex';
+                setTimeout(() => confirmOverlay.classList.add('show'), 10);
+            }
+            function hideCustomConfirm() {
+                confirmOverlay.classList.remove('show');
+                setTimeout(() => confirmOverlay.style.display = 'none', 300);
+            }
+
+            if (confirmNoBtn) confirmNoBtn.addEventListener('click', hideCustomConfirm);
+            if (confirmOverlay) confirmOverlay.addEventListener('click', (e) => e.target === confirmOverlay && hideCustomConfirm());
+            if (confirmYesBtn) {
+                confirmYesBtn.addEventListener('click', () => {
+                    if (confirmCallback) {
+                        confirmCallback();
+                    }
+                    hideCustomConfirm();
+                });
+            }
+
+            if (retestBtn) {
+                retestBtn.addEventListener('click', (event) => {
+                    event.preventDefault(); // aタグではないので不要ですが念のため
+                    showCustomConfirm('本当に再診断しますか？今回の診断結果は上書きされます。', () => {
+                        window.location.href = "/quiz";
+                    });
+                });
+            }
+        });
+    </script>
+</body>
+</html>

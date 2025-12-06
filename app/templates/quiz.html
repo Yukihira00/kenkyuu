@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>HEXACO性格診断</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        .question-item { margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border-color); }
+        .question-item:last-of-type { border-bottom: none; }
+        .question-item p { font-size: 1.1em; font-weight: 500; text-align: center; margin-bottom: 1.5rem; }
+        .options-container { display: flex; align-items: center; justify-content: center; gap: 1vw; }
+        .option-label-text { flex: 0 0 100px; text-align: center; color: var(--text-color-light); white-space: nowrap; font-size: 0.9em; }
+        .options { display: flex; flex-grow: 1; justify-content: center; gap: 0.8vw; align-items: center; }
+        .option { display: flex; flex-direction: column; align-items: center; flex: 1 1 0; }
+        input[type="radio"] { display: none; }
+        .option label { display: block; border: 2.5px solid #ccc; border-radius: 50%; cursor: pointer; transition: all 0.2s; margin: 0 auto; background: #fff; }
+        .circle-1, .circle-5 { width: 42px; height: 42px; }
+        .circle-2, .circle-4 { width: 34px; height: 34px; }
+        .circle-3 { width: 26px; height: 26px; }
+        .circle-1, .circle-2 { border-color: var(--secondary-color); }
+        .circle-4, .circle-5 { border-color: var(--primary-color); }
+        input[type="radio"]:checked + .circle-1, .option label.circle-1:hover,
+        input[type="radio"]:checked + .circle-2, .option label.circle-2:hover { background-color: var(--secondary-color); border-color: var(--secondary-color); }
+        input[type="radio"]:checked + .circle-3, .option label.circle-3:hover { background-color: #9B9EAB; border-color: #9B9EAB; }
+        input[type="radio"]:checked + .circle-4, .option label.circle-4:hover,
+        input[type="radio"]:checked + .circle-5, .option label.circle-5:hover { background-color: var(--primary-color); border-color: var(--primary-color); }
+        .option label:hover { transform: scale(1.15); }
+        input[type="radio"]:checked + label { transform: scale(1.1); }
+        .navigation-buttons { display: flex; justify-content: space-between; align-items: center; margin-top: 2rem; }
+        @media (max-width: 600px) {
+            .option-label-text { font-size: 0.8em; flex-basis: 60px; }
+            .options { gap: 0.5vw; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>HEXACO性格診断</h1>
+            <form id="quizForm" action="/submit" method="post" autocomplete="off">
+                {% set page_size = 10 %}
+                {% for q in questions %}
+                    {% if loop.index0 % page_size == 0 %}
+                        {% if not loop.first %}</div>{% endif %}
+                        <div class="question-page" id="page-{{ (loop.index0 // page_size) + 1 }}" {% if not loop.first %}style="display: none;"{% endif %}>
+                    {% endif %}
+                    <div class="question-item">
+                        <p><strong>質問{{ q.id }}:</strong><br>{{ q.text }}</p>
+                        <div class="options-container">
+                            <span class="option-label-text">まったく<br>当てはまらない</span>
+                            <div class="options">
+                                <div class="option"><input type="radio" name="q{{ q.id }}" id="q{{ q.id }}-1" value="1" required><label for="q{{ q.id }}-1" class="circle-5"></label></div>
+                                <div class="option"><input type="radio" name="q{{ q.id }}" id="q{{ q.id }}-2" value="2"><label for="q{{ q.id }}-2" class="circle-4"></label></div>
+                                <div class="option"><input type="radio" name="q{{ q.id }}" id="q{{ q.id }}-3" value="3"><label for="q{{ q.id }}-3" class="circle-3"></label></div>
+                                <div class="option"><input type="radio" name="q{{ q.id }}" id="q{{ q.id }}-4" value="4"><label for="q{{ q.id }}-4" class="circle-2"></label></div>
+                                <div class="option"><input type="radio" name="q{{ q.id }}" id="q{{ q.id }}-5" value="5"><label for="q{{ q.id }}-5" class="circle-1"></label></div>
+                            </div>
+                            <span class="option-label-text">すごく<br>当てはまる</span>
+                        </div>
+                    </div>
+                {% endfor %}
+                </div>
+
+                <div class="navigation-buttons">
+                    <button type="button" id="prevBtn" class="btn btn-secondary">前のページへ</button>
+                    <button type="button" id="nextBtn" class="btn btn-primary">次のページへ</button>
+                    <button type="submit" id="submitBtn" class="btn btn-primary" style="display: none;">診断結果を見る</button>
+                </div>
+                <div id="warning" class="error-message" style="display: none;"></div>
+                {% if error %}
+                    <p class="error-message">{{ error }}</p>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+    <script>
+        let currentPage = 1;
+        const totalPages = Math.ceil(Number("{{ questions|length }}") / 10);
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const submitBtn = document.getElementById('submitBtn');
+        const warning = document.getElementById('warning');
+        function showPage(pageNumber) {
+            document.querySelectorAll('.question-page').forEach(page => {
+                page.style.display = 'none';
+            });
+            document.getElementById(`page-${pageNumber}`).style.display = 'block';
+            window.scrollTo({top: 0, behavior: "smooth"});
+        }
+        function validateCurrentPageAndFocus() {
+            const currentPageDiv = document.getElementById(`page-${currentPage}`);
+            const questionsOnPage = currentPageDiv.querySelectorAll('.question-item');
+            for (let i = 0; i < questionsOnPage.length; i++) {
+                if (!questionsOnPage[i].querySelector('input[type="radio"]:checked')) {
+                    questionsOnPage[i].scrollIntoView({behavior: "smooth", block: "center"});
+                    warning.textContent = '未回答の質問があります。すべて回答してください。';
+                    warning.style.display = 'block';
+                    return false;
+                }
+            }
+            warning.style.display = 'none';
+            return true;
+        }
+        function updateButtons() {
+            prevBtn.style.visibility = (currentPage === 1) ? 'hidden' : 'visible';
+            if (currentPage === totalPages) {
+                nextBtn.style.display = 'none';
+                submitBtn.style.display = 'inline-block';
+            } else {
+                nextBtn.style.display = 'inline-block';
+                submitBtn.style.display = 'none';
+            }
+        }
+        nextBtn.addEventListener('click', () => {
+            if (validateCurrentPageAndFocus()) {
+                if (currentPage < totalPages) {
+                    currentPage++;
+                    showPage(currentPage);
+                    updateButtons();
+                }
+            }
+        });
+        prevBtn.addEventListener('click', () => {
+            if (currentPage > 1) {
+                currentPage--;
+                showPage(currentPage);
+                updateButtons();
+            }
+        });
+        showPage(currentPage);
+        updateButtons();
+    </script>
+</body>
+</html>
