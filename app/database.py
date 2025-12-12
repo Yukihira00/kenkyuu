@@ -15,7 +15,7 @@ DB_PASS = os.getenv('POSTGRES_PASSWORD')
 DB_HOST = os.getenv('POSTGRES_HOST')
 
 def get_connection():
-    """データベースへの接続を取得し、vector型を登録する"""
+    """アプリケーション用の接続を取得（pgvector登録付き）"""
     try:
         conn = psycopg2.connect(
             dbname=DB_NAME,
@@ -24,38 +24,32 @@ def get_connection():
             host=DB_HOST,
             cursor_factory=psycopg2.extras.RealDictCursor
         )
-        # pgvectorの登録を試みる（失敗しても接続自体は返す）
+        # アプリでの利用時はpgvectorを登録する
         try:
             register_vector(conn)
         except Exception as e:
-            print(f"⚠️ vector型の登録に失敗しました（無視して続行します）: {e}")
+            print(f"⚠️ vector型の登録警告: {e}")
         return conn
     except Exception as e:
         print(f"❌ データベース接続エラー: {e}")
         raise e
 
 def initialize_database():
-    """データベースとテーブルを初期化する"""
+    """データベースとテーブルを初期化する（DDL専用接続を使用）"""
     print("🚀 データベース初期化プロセスを開始します...")
     
-    # ステップ1: 拡張機能の有効化（失敗しても次に進む！）
     try:
-        conn_init = psycopg2.connect(dbname=DB_NAME, user=DB_USER, password=DB_PASS, host=DB_HOST)
-        conn_init.autocommit = True
-        cursor_init = conn_init.cursor()
-        cursor_init.execute("CREATE EXTENSION IF NOT EXISTS vector;")
-        cursor_init.close()
-        conn_init.close()
-        print("✅ pgvector 拡張機能の確認完了")
-    except Exception as e:
-        # ここで return せず、ログだけ出して次に進みます
-        print(f"⚠️ pgvector 拡張機能の有効化スキップ（すでに存在する等の理由）: {e}")
-
-    # ステップ2: テーブル作成（ここが本命）
-    try:
-        conn = get_connection()
-        conn.autocommit = True # エラー時のロールバック問題を回避
+        # 【修正点】get_connection()を使わず、素の接続を使う
+        # これにより register_vector に起因するトランザクション問題を回避する
+        conn = psycopg2.connect(dbname=DB_NAME, user=DB_USER, password=DB_PASS, host=DB_HOST)
+        conn.autocommit = True # エラー回避のため即座に自動コミットモードへ
         cursor = conn.cursor()
+
+        print("🔧 pgvector拡張機能を確認中...")
+        try:
+            cursor.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+        except Exception as e:
+            print(f"⚠️ 拡張機能スキップ（すでに存在する等）: {e}")
 
         print("🛠️ テーブルを作成中...")
 
@@ -118,9 +112,9 @@ def initialize_database():
         
     except Exception as e:
         print(f"❌ テーブル作成中に致命的なエラーが発生: {e}")
-        # ここでエラーが起きているかログで確認できるようにする
 
-# 以下は既存の関数そのまま（変更なし）
+# --- 以下は変更なし ---
+
 def add_unpleasant_feedback(user_did: str, post_uri: str):
     conn = get_connection()
     cursor = conn.cursor()
