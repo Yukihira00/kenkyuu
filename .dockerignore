@@ -1,0 +1,8 @@
+# .dockerignore
+__pycache__
+venv
+.venv
+.git
+.env
+*.pyc
+postgres_data
