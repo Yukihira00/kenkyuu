@@ -21,12 +21,16 @@ import llm_analyzer
 import type_descriptions
 
 app = FastAPI()
+@app.on_event("startup")
+def on_startup():
+    database.initialize_database()
 
 # ▼▼▼【修正】場所を正確に指定するように変更 ▼▼▼
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 # 適当な固定の文字列を指定します（本番環境では推測されにくい長い文字列にしてください）
-app.add_middleware(SessionMiddleware, secret_key="e9e4500563ce16bb025f3b08b56fae41146b8cd0871275b3cb2a7df4e3c4f7b6")
+SECRET_KEY = os.getenv("APP_SECRET_KEY", "ランダムなデフォルトキー") 
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
