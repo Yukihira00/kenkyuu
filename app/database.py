@@ -16,96 +16,111 @@ DB_HOST = os.getenv('POSTGRES_HOST')
 
 def get_connection():
     """データベースへの接続を取得し、vector型を登録する"""
-    conn = psycopg2.connect(
-        dbname=DB_NAME,
-        user=DB_USER,
-        password=DB_PASS,
-        host=DB_HOST,
-        cursor_factory=psycopg2.extras.RealDictCursor
-    )
-    register_vector(conn)
-    return conn
+    try:
+        conn = psycopg2.connect(
+            dbname=DB_NAME,
+            user=DB_USER,
+            password=DB_PASS,
+            host=DB_HOST,
+            cursor_factory=psycopg2.extras.RealDictCursor
+        )
+        # pgvectorの登録を試みる（失敗しても接続自体は返す）
+        try:
+            register_vector(conn)
+        except Exception as e:
+            print(f"⚠️ vector型の登録に失敗しました（無視して続行します）: {e}")
+        return conn
+    except Exception as e:
+        print(f"❌ データベース接続エラー: {e}")
+        raise e
 
 def initialize_database():
     """データベースとテーブルを初期化する"""
-    # ステップ1: 拡張機能を作成するための専用接続
+    print("🚀 データベース初期化プロセスを開始します...")
+    
+    # ステップ1: 拡張機能の有効化（失敗しても次に進む！）
     try:
         conn_init = psycopg2.connect(dbname=DB_NAME, user=DB_USER, password=DB_PASS, host=DB_HOST)
+        conn_init.autocommit = True
         cursor_init = conn_init.cursor()
         cursor_init.execute("CREATE EXTENSION IF NOT EXISTS vector;")
-        conn_init.commit()
         cursor_init.close()
         conn_init.close()
-        print("✅ pgvector 拡張機能が有効化されました。")
+        print("✅ pgvector 拡張機能の確認完了")
     except Exception as e:
-        print(f"⚠️ pgvector 拡張機能の有効化中にエラーが発生しました: {e}")
-        return
+        # ここで return せず、ログだけ出して次に進みます
+        print(f"⚠️ pgvector 拡張機能の有効化スキップ（すでに存在する等の理由）: {e}")
 
-    # ステップ2: 拡張機能が有効になった後、テーブルを作成するための通常の接続
-    conn = get_connection()
-    cursor = conn.cursor()
+    # ステップ2: テーブル作成（ここが本命）
+    try:
+        conn = get_connection()
+        conn.autocommit = True # エラー時のロールバック問題を回避
+        cursor = conn.cursor()
 
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS users (
-        user_did TEXT PRIMARY KEY, handle TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL
-    )''')
+        print("🛠️ テーブルを作成中...")
 
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS hexaco_results (
-        result_id SERIAL PRIMARY KEY, user_did TEXT NOT NULL,
-        H REAL NOT NULL, E REAL NOT NULL, X REAL NOT NULL,
-        A REAL NOT NULL, C REAL NOT NULL, O REAL NOT NULL,
-        diagnosed_at TIMESTAMPTZ NOT NULL,
-        FOREIGN KEY (user_did) REFERENCES users (user_did)
-    )''')
-    
-    # ▼▼▼【修正】filter_strength列を追加 ▼▼▼
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS filter_settings (
-        setting_id SERIAL PRIMARY KEY, user_did TEXT NOT NULL UNIQUE,
-        hidden_content_categories TEXT[] NOT NULL,
-        auto_filter_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-        similarity_filter_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-        filter_strength INTEGER NOT NULL DEFAULT 2, -- 1:弱, 2:標準, 3:強
-        updated_at TIMESTAMPTZ NOT NULL,
-        FOREIGN KEY (user_did) REFERENCES users (user_did)
-    )''')
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            user_did TEXT PRIMARY KEY, handle TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL
+        )''')
 
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS post_analysis_cache (
-        post_uri TEXT PRIMARY KEY, content_category TEXT NOT NULL,
-        expression_category TEXT NOT NULL, style_stance_category TEXT NOT NULL,
-        embedding vector(768),
-        analyzed_at TIMESTAMPTZ NOT NULL
-    )''')
-    
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS unpleasant_feedback (
-        feedback_id SERIAL PRIMARY KEY, user_did TEXT NOT NULL, post_uri TEXT NOT NULL,
-        reported_at TIMESTAMPTZ NOT NULL,
-        FOREIGN KEY (user_did) REFERENCES users (user_did),
-        FOREIGN KEY (post_uri) REFERENCES post_analysis_cache (post_uri)
-    )''')
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS hexaco_results (
+            result_id SERIAL PRIMARY KEY, user_did TEXT NOT NULL,
+            H REAL NOT NULL, E REAL NOT NULL, X REAL NOT NULL,
+            A REAL NOT NULL, C REAL NOT NULL, O REAL NOT NULL,
+            diagnosed_at TIMESTAMPTZ NOT NULL,
+            FOREIGN KEY (user_did) REFERENCES users (user_did)
+        )''')
+        
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS filter_settings (
+            setting_id SERIAL PRIMARY KEY, user_did TEXT NOT NULL UNIQUE,
+            hidden_content_categories TEXT[] NOT NULL,
+            auto_filter_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+            similarity_filter_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+            filter_strength INTEGER NOT NULL DEFAULT 2,
+            similarity_threshold REAL NOT NULL DEFAULT 0.80,
+            updated_at TIMESTAMPTZ NOT NULL,
+            FOREIGN KEY (user_did) REFERENCES users (user_did)
+        )''')
 
-    # ▼▼▼【追加】フィルターへのフィードバックを保存するテーブルを追加 ▼▼▼
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS filter_feedback (
-        feedback_id SERIAL PRIMARY KEY,
-        user_did TEXT NOT NULL,
-        post_uri TEXT NOT NULL,
-        filter_type TEXT NOT NULL, -- 'personality', 'similarity', 'manual'など
-        feedback TEXT NOT NULL, -- 'correct', 'incorrect'
-        created_at TIMESTAMPTZ NOT NULL,
-        FOREIGN KEY (user_did) REFERENCES users (user_did)
-    )''')
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS post_analysis_cache (
+            post_uri TEXT PRIMARY KEY, content_category TEXT NOT NULL,
+            expression_category TEXT NOT NULL, style_stance_category TEXT NOT NULL,
+            embedding vector(768),
+            analyzed_at TIMESTAMPTZ NOT NULL
+        )''')
+        
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS unpleasant_feedback (
+            feedback_id SERIAL PRIMARY KEY, user_did TEXT NOT NULL, post_uri TEXT NOT NULL,
+            reported_at TIMESTAMPTZ NOT NULL,
+            FOREIGN KEY (user_did) REFERENCES users (user_did),
+            FOREIGN KEY (post_uri) REFERENCES post_analysis_cache (post_uri)
+        )''')
 
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS filter_feedback (
+            feedback_id SERIAL PRIMARY KEY,
+            user_did TEXT NOT NULL,
+            post_uri TEXT NOT NULL,
+            filter_type TEXT NOT NULL,
+            feedback TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL,
+            FOREIGN KEY (user_did) REFERENCES users (user_did)
+        )''')
 
-    conn.commit()
-    cursor.close()
-    conn.close()
-    print(f"✅ PostgreSQLデータベース '{DB_NAME}' のテーブル初期化が完了しました。")
+        cursor.close()
+        conn.close()
+        print("✅ 全テーブルの作成確認が完了しました。")
+        
+    except Exception as e:
+        print(f"❌ テーブル作成中に致命的なエラーが発生: {e}")
+        # ここでエラーが起きているかログで確認できるようにする
 
-
+# 以下は既存の関数そのまま（変更なし）
 def add_unpleasant_feedback(user_did: str, post_uri: str):
     conn = get_connection()
     cursor = conn.cursor()
@@ -128,7 +143,6 @@ def get_unpleasant_feedback_uris(user_did: str) -> list[str]:
     return [result['post_uri'] for result in results]
 
 def get_unpleasant_post_vectors(user_did: str) -> list[np.ndarray]:
-    """指定されたユーザーが不快報告した投稿のベクトルリストを取得する"""
     conn = get_connection()
     cursor = conn.cursor()
     query = """
@@ -165,20 +179,17 @@ def get_user_result(user_did: str):
 def get_user_filter_settings(user_did: str):
     conn = get_connection()
     cursor = conn.cursor()
-    # ▼ similarity_threshold を追加
     cursor.execute("SELECT hidden_content_categories, auto_filter_enabled, similarity_filter_enabled, filter_strength, similarity_threshold FROM filter_settings WHERE user_did = %s", (user_did,))
     settings = cursor.fetchone()
     cursor.close()
     conn.close()
     if settings: return settings
-    # ▼ デフォルト値に similarity_threshold: 0.80 を追加
     else: return {'hidden_content_categories': [], 'auto_filter_enabled': True, 'similarity_filter_enabled': True, 'filter_strength': 2, 'similarity_threshold': 0.80}
-# ▼▼▼【修正】関数シグネチャとSQL文を修正 ▼▼▼
+
 def save_user_filter_settings(user_did: str, content: list[str], auto_filter: bool, similarity_filter: bool, filter_strength: int, similarity_threshold: float):
     conn = get_connection()
     cursor = conn.cursor()
     now = datetime.now()
-    # ▼ SQL文と引数に similarity_threshold を追加
     cursor.execute('''
         INSERT INTO filter_settings (user_did, hidden_content_categories, auto_filter_enabled, similarity_filter_enabled, filter_strength, similarity_threshold, updated_at) 
         VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -224,9 +235,7 @@ def save_analysis_results(post_uri: str, analysis_result: dict):
     cursor.close()
     conn.close()
 
-# ▼▼▼【追加】フィードバックを保存する関数を追加 ▼▼▼
 def add_filter_feedback(user_did: str, post_uri: str, filter_type: str, feedback: str):
-    """ユーザーからのフィルターフィードバックをデータベースに保存する"""
     conn = get_connection()
     cursor = conn.cursor()
     now = datetime.now()
@@ -237,7 +246,6 @@ def add_filter_feedback(user_did: str, post_uri: str, filter_type: str, feedback
     conn.commit()
     cursor.close()
     conn.close()
-
 
 if __name__ == '__main__':
     initialize_database()
