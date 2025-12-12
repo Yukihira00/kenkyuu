@@ -228,22 +228,50 @@
 
 <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const feedContent = document.getElementById('feed-content');
+            const feedContentWrapper = document.getElementById('feed-content');
             const initialLoader = document.getElementById('initial-loader');
             const reloadBtn = document.getElementById('reload-timeline-btn');
             const statsPlaceholder = document.getElementById('filter-stats-placeholder');
+            
             let currentFeedType = 'search';
 
-            // ★ 件数集計用の変数
-            let accTotalPosts = 0;
-            let accHiddenPosts = 0;
+            // ★ フィードごとの状態管理 (DOM要素、カーソル、件数、ロード済みフラグ)
+            const feedState = {
+                'search': { 
+                    el: null, 
+                    cursor: null, 
+                    total: 0, 
+                    hidden: 0, 
+                    isLoaded: false 
+                },
+                'timeline': { 
+                    el: null, 
+                    cursor: null, 
+                    total: 0, 
+                    hidden: 0, 
+                    isLoaded: false 
+                }
+            };
+
+            // コンテナの初期化
+            ['search', 'timeline'].forEach(type => {
+                const div = document.createElement('div');
+                div.id = `feed-container-${type}`;
+                div.className = 'feed-container';
+                div.style.display = 'none'; // 初期状態は非表示
+                feedContentWrapper.appendChild(div);
+                feedState[type].el = div;
+            });
+
+            // デフォルトのコンテナを表示
+            feedState['search'].el.style.display = 'block';
 
             // --- Parallel Batch Analysis Worker ---
-            // ★ Rate Limit対策: BATCH_SIZEを増やし、MAX_CONCURRENTを減らす
+            // ★ Rate Limit対策: バッチサイズ10、並列2 (中速・安定)
             let analysisBuffer = [];
-            const BATCH_SIZE = 10;      // 5 -> 10 に変更（リクエスト回数を減らす）
+            const BATCH_SIZE = 10;
             const FLUSH_INTERVAL = 300; 
-            const MAX_CONCURRENT = 3;   // 3 -> 1 に変更（同時リクエストを制限）
+            const MAX_CONCURRENT = 2;
             let activeRequests = 0;
 
             async function processBatch() {
@@ -320,6 +348,17 @@
                             postContent.appendChild(fbSection);
                         }
                     }
+
+                    // 【修正】後から非表示になった分をカウントに加算する
+                    let targetFeed = null;
+                    if (feedState['search'].el.contains(element)) targetFeed = 'search';
+                    else if (feedState['timeline'].el.contains(element)) targetFeed = 'timeline';
+
+                    if (targetFeed) {
+                        feedState[targetFeed].hidden++;
+                        // 現在見ているタブなら、見た目の数字も更新
+                        if (targetFeed === currentFeedType) updateStatsUI();
+                    }
                 }
 
                 const placeholder = element.querySelector('.analysis-placeholder');
@@ -338,21 +377,41 @@
                 }
             }
 
+            function updateStatsUI() {
+                const state = feedState[currentFeedType];
+                if (state.total > 0 && statsPlaceholder) {
+                    statsPlaceholder.innerHTML = `${state.total}件中 <strong>${state.hidden}件</strong> 非表示`;
+                } else if (statsPlaceholder) {
+                    statsPlaceholder.innerHTML = '';
+                }
+            }
+
             // タブ切り替え
             document.querySelectorAll('.modern-tab-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
                     if (btn.classList.contains('active')) return;
                     document.querySelectorAll('.modern-tab-btn').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
-                    currentFeedType = btn.dataset.type;
-                    feedContent.innerHTML = ''; 
-                    // タブ切り替え時はカウントリセット
-                    accTotalPosts = 0;
-                    accHiddenPosts = 0;
-                    if(statsPlaceholder) statsPlaceholder.innerHTML = '';
                     
-                    if (initialLoader) initialLoader.style.display = 'flex';
-                    loadTimeline(null, false);
+                    // タブ切り替え処理
+                    const prevType = currentFeedType;
+                    currentFeedType = btn.dataset.type;
+
+                    // コンテナの表示切り替え
+                    feedState[prevType].el.style.display = 'none';
+                    feedState[currentFeedType].el.style.display = 'block';
+
+                    // 統計情報の更新
+                    updateStatsUI();
+                    
+                    // まだロードされていない場合のみ読み込む
+                    if (!feedState[currentFeedType].isLoaded) {
+                        if (initialLoader) initialLoader.style.display = 'flex';
+                        loadTimeline(null, false);
+                    } else {
+                        // 既にロード済みならローダーは隠す
+                        if (initialLoader) initialLoader.style.display = 'none';
+                    }
                 });
             });
 
@@ -364,6 +423,9 @@
                     reloadBtn.classList.add('loading');
                     reloadBtn.innerHTML = '<div class="spinner" style="width:14px;height:14px;border-width:2px;margin:0;"></div> 読み込み中';
                 }
+
+                const targetContainer = feedState[currentFeedType].el;
+                const state = feedState[currentFeedType];
 
                 fetch(url)
                     .then(response => { if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`); return response.text(); })
@@ -377,27 +439,27 @@
                         const tempDiv = document.createElement('div');
                         tempDiv.innerHTML = html;
                         
-                        // ★ カウントの加算ロジック
+                        // ★ カウントの加算ロジック (状態オブジェクトに対して行う)
                         const batchInfo = tempDiv.querySelector('.batch-info');
                         if (batchInfo) {
                             const newTotal = parseInt(batchInfo.dataset.total || 0);
                             const newHidden = parseInt(batchInfo.dataset.hidden || 0);
                             
-                            if (!cursor && !isPrepend && feedContent.children.length === 0) {
-                                accTotalPosts = 0;
-                                accHiddenPosts = 0;
+                            // リロード時などでコンテナが空の場合はリセット（念のため）
+                            if (!cursor && !isPrepend && targetContainer.children.length === 0) {
+                                state.total = 0;
+                                state.hidden = 0;
                             }
 
-                            accTotalPosts += newTotal;
-                            accHiddenPosts += newHidden;
-
-                            if (accTotalPosts > 0 && statsPlaceholder) {
-                                statsPlaceholder.innerHTML = `${accTotalPosts}件中 <strong>${accHiddenPosts}件</strong> 非表示`;
-                            }
+                            state.total += newTotal;
+                            state.hidden += newHidden;
+                            updateStatsUI();
                         }
 
-                        const existingMoreBtn = document.querySelector('.load-more-container');
+                        // 現在のコンテナ内のLoad Moreボタンを削除
+                        const existingMoreBtn = targetContainer.querySelector('.load-more-container');
                         if (existingMoreBtn && !isPrepend) existingMoreBtn.remove();
+                        
                         const newMoreBtn = tempDiv.querySelector('.load-more-container');
 
                         const newPosts = tempDiv.querySelectorAll('.post-mosaic-container');
@@ -417,13 +479,16 @@
                         });
 
                         if (isPrepend) {
-                            feedContent.prepend(fragment);
+                            targetContainer.prepend(fragment);
                             showCustomAlert(`${postsToAnalyze.length > 0 ? '投稿を読み込み、分析を開始します' : '投稿を読み込みました'}`);
                         } else {
-                            feedContent.appendChild(fragment);
+                            targetContainer.appendChild(fragment);
                         }
                         
-                        if (newMoreBtn && !isPrepend) feedContent.appendChild(newMoreBtn);
+                        if (newMoreBtn && !isPrepend) targetContainer.appendChild(newMoreBtn);
+
+                        // 読み込み完了フラグを立てる
+                        state.isLoaded = true;
 
                         postsToAnalyze.forEach(post => enqueueAnalysis(post));
                     })
@@ -443,6 +508,7 @@
             if ('requestIdleCallback' in window) requestIdleCallback(() => loadTimeline(null, false));
             else setTimeout(() => loadTimeline(null, false), 100);
 
+            // Load More ボタンのクリックイベント（コンテナを意識せずに親を探すだけでOK）
             document.addEventListener('click', function(e) {
                 if(e.target.closest('#load-more-btn')) {
                     const btn = e.target.closest('#load-more-btn');
@@ -458,7 +524,16 @@
             document.addEventListener('click', function(e) {
                 if (e.target.closest('#reload-timeline-btn')) { 
                     window.scrollTo({ top: 0, behavior: 'smooth' });
-                    loadTimeline(null, true); 
+                    // リロードボタンが押されたら、現在のコンテナをクリアして再取得
+                    const state = feedState[currentFeedType];
+                    state.el.innerHTML = '';
+                    state.total = 0;
+                    state.hidden = 0;
+                    state.isLoaded = false;
+                    updateStatsUI();
+                    
+                    if (initialLoader) initialLoader.style.display = 'flex';
+                    loadTimeline(null, false); 
                     return; 
                 }
                 if (e.target.matches('.reveal-button')) {

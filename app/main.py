@@ -1,6 +1,7 @@
 # main.py
 from datetime import datetime
 import secrets
+import os  # ◀◀◀【追加】これを追加してください
 from typing import List, Optional # 【修正】ここを追加しました
 from fastapi.concurrency import run_in_threadpool
 from fastapi import FastAPI, Request, Form, Body
@@ -20,9 +21,14 @@ import llm_analyzer
 import type_descriptions
 
 app = FastAPI()
-app.mount("/static", StaticFiles(directory="static"), name="static")
-app.add_middleware(SessionMiddleware, secret_key=secrets.token_hex(32))
-templates = Jinja2Templates(directory="templates")
+
+# ▼▼▼【修正】場所を正確に指定するように変更 ▼▼▼
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
+# 適当な固定の文字列を指定します（本番環境では推測されにくい長い文字列にしてください）
+app.add_middleware(SessionMiddleware, secret_key="e9e4500563ce16bb025f3b08b56fae41146b8cd0871275b3cb2a7df4e3c4f7b6")
+templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
+# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
 def cosine_similarity(vec1, vec2):
     return np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
@@ -150,7 +156,7 @@ async def get_timeline_content(request: Request, cursor: str = None, feed_type: 
         timeline_checker.get_timeline_data,
         request.session['handle'], 
         request.session['app_password'], 
-        limit=100, 
+        limit=50, 
         cursor=cursor,
         feed_type=feed_type
     )
