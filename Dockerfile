@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y \
 
 COPY requirements.txt .
 
-# 【重要】巨大なGPU版ではなく、軽量なCPU版のPyTorchを先にインストール
+# 軽量なCPU版のPyTorchをインストール
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 
 # その他のライブラリをインストール
@@ -19,5 +19,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # アプリのコピー
 COPY . .
 
-# アプリ起動コマンド
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+# 【ここが修正点】作業場所を app フォルダの中に変更します
+WORKDIR /app/app
+
+# 【ここも修正点】app.main ではなく main:app に変更します
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
